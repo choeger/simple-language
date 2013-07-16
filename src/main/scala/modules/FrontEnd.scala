@@ -36,13 +36,13 @@ package de.tuberlin.uebb.sl2.modules
   */
 trait FrontEnd {
 
-  this: Syntax with Parser with ProgramChecker with Errors =>
+  this: Syntax with Parser with EnrichedLambdaCalculus with ProgramChecker with Errors =>
 
   /**
     * Run the SL front-end, i.e., parse the given input strings and perform
     * context analysis on the resulting syntax trees.
     */
-  def run(input: List[String]): Either[Error, AST] = {
+  def run(input: List[String]): Either[Error, ELC] = {
 
     def parseProgram(in: String): Either[Error, Program] = for ( ast <- parseAst(in).right ) yield ast.asInstanceOf[Program]
 
@@ -52,8 +52,8 @@ trait FrontEnd {
 
     for ( programs <- errorMap(input, (in: String) => parseProgram(in)).right ;
 	  ast <- mergePrograms(programs).right ;
-	  _ <- checkProgram(ast).right )
-    yield ast
+	  elc <- checkProgram(ast).right )
+    yield elc
   }
 
   /**

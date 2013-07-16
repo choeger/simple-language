@@ -19,4 +19,4 @@ libraryDependencies ++= Seq(
 	"net.sf.jgrapht" % "jgrapht" % "0.8.3"
 )
 
-mainClass := Some("de.tuberlin.uebb.sl2.impl.FrontEndImpl")
+mainClass := Some("de.tuberlin.uebb.sl2.impl.InterpreterImpl")

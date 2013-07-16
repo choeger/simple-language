@@ -50,14 +50,14 @@ trait ProgramCheckerImpl extends ProgramChecker {
     * $ - Type checking of function definitions, and
     * $ - Checking the type of a program's main function.
     */
-  def checkProgram(in: AST): Either[Error, Unit] = {
+  def checkProgram(in: AST): Either[Error, ELC] = {
     for ( initialContext <- checkDataTypes(in).right ;
 	  (funSigs, funDefs) <- checkFunctions(in).right ;
 	  elc <- splitLetRecs(predefinedFuns.toSet, programToELC(funSigs, funDefs)).right ;
 	  _ <- checkLetRecs(elc).right ;
 	  mainType <- checkTypes(initialContext <++> predefsContext, elc).right ;
 	  _ <- checkMain(funSigs, mainType).right )
-    yield ()
+    yield elc
   }
 
 

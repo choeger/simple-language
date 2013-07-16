@@ -38,10 +38,10 @@ package de.tuberlin.uebb.sl2.modules
   */
 trait ProgramChecker {
 
-  this: Syntax with Context with Errors =>
+  this: Syntax with EnrichedLambdaCalculus with Errors =>
 
   /**
     * Context analysis.
     */
-  def checkProgram(in: AST): Either[Error, Unit]
+  def checkProgram(in: AST): Either[Error, ELC]
 }
