@@ -37,13 +37,11 @@ import Scalaz._
 
 import scala.language.implicitConversions
 
-trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax {
+trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPatternMatching {
 
   def instanceField = ClassField("instance", TObject)
-
-  def tagField(klazz:ClassName) = ClassField("tag", TClass(klazz $ "ETag") )
   
-  sealed case class IMEncodingState(classes : List[IMClass])
+  sealed case class IMEncodingState(classes : List[IMClass] = Nil, freshName : Int = 0)
 
   type Encoder[A] = State[IMEncodingState, A]
 
@@ -57,42 +55,100 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax {
     for (s <- get) yield base $ s.classes.size.toString
   }
 
+  def freshName : Encoder[IMName] = {
+    for (s <- get[IMEncodingState]; c=s.freshName; _ <- put(s.copy(freshName=c+1))) yield "#tmp_"+c
+  }
+
   def encode(env : IMEncodingEnv, s : Expr) : (IMCode, List[IMClass]) = {
 
-    def newClosure(e : Expr, vars : List[String]) : Encoder[IMClass] = { for {
-      imB <- enc(e) ;
+    object onlyVars {
+      def unapply(p : List[Pattern]) : Option[List[IMName]] = p match {
+        case Nil => Some(Nil)
+        case PatternVar(n,_)::onlyVars(rest) => Some(n::rest)
+        case _ => None
+      }
+    }
+
+    object simplePattern {
+      def unapply(a : Alternative) : Option[Encoder[SimplePattern]] = a match {
+        case Alternative(PatternExpr(ConVar(c, LocalMod), onlyVars(vars), _), expr, _) =>
+          Some(for (r <- enc(expr)) yield SimplePattern(env.currentModule, c, vars, r))
+        case Alternative(PatternExpr(ConVar(c, mod), onlyVars(vars), _), expr, _) =>
+          Some(for (r <- enc(expr)) yield SimplePattern(env.modules(mod), c, vars, r))
+        case _ => None
+      }
+    }
+
+    object simplePatterns {
+      def unapply(a : List[Alternative]) : Option[List[Encoder[SimplePattern]]] = a match {
+        case simplePattern(pat)::simplePatterns(rest) => Some(pat::rest)
+        case Nil => Some(Nil)
+        case _ => None
+      }
+    }
+
+    def case2SimpleMatch(e : Expr) = e match {
+      case Case(ExVar(Var(n, LocalMod), _), simplePatterns(alts), _) => {
+        for (e <- alts.sequence) yield IMSimpleMatch(n, e)
+      }
+      case _ => throw new RuntimeException("Internal Error. Unexpected Pattern: " + e)
+    }
+
+    def newClosure(vars : List[String], args : Int, imB : IMCode) : Encoder[IMClass] = { for {
       name <- freshClassName(env.currentModule) ;
       cls <- {
-        val cls = IMClosureClass(name, vars map (ClassField(_, TObject)), imB)
+        val cls = IMClosureClass(name, vars map (ClassField(_, TObject)), args, imB)
         addClass(cls)
       }
     } yield (cls) }
 
+    def makeLet(in : IMCode, letDef : LetDef) : Encoder[IMCode] = {
+      for {
+        d <- enc(letDef.rhs)
+      } yield IMLet(letDef.lhs, d, in)
+    }
+
+    def makeCase(e : Expr, arg : (Pattern, Int)) = {
+      val (p, nr) = arg
+      Case(ExVar(Var("arg_" + nr)), Alternative(p, e)::Nil)
+    }
 
     def enc(s : Expr) : Encoder[IMCode] = s match {
       case Lambda(ps, e, _) => {
         val vars = (for (Var(name,mod) <- fv(s); 
                          if mod == LocalMod) 
                     yield name) -- env.localNames
+
+        /* one big fat case body */
+        //TODO: this implies *late* failure of match
+        //check, whether this is a good idea!
+        val rhs = (e /: ps.zipWithIndex)(makeCase)
         
         for {
-          cls <- newClosure(e, vars.toList)
+          cs <- enc(rhs) ; 
+          cls <- newClosure(vars.toList, ps.size, cs)
         } yield IMStaticAcc(cls.name, instanceField)
       }
 
-      //case Case(e, as, _) => 
+      case Case(e, as, _) => {
+        for {
+          name <- freshName ;
+          matchee <- enc(e) ;
+          simplified = createSimpleCaseMatch(env.data, as map alt2Equation, Var(name)::Nil ) ;
+          simpleMatch <- case2SimpleMatch(simplified)
+        } yield IMLet(name, matchee, simpleMatch)
+      }
       
       case App(f, e, _) => for {
         imF <- enc(f);
         imA <- enc(e)
       } yield IMApp(imF, imA)
       
-      /*
-      case Let(defs, r, _) => for { 
-        imB <- enc(e);
-        imR <- enc(r)
-      } yield IMLet(ds, imB, imR ) 
-      */
+      case Let(defs, r, _) =>
+        for {
+          b <- enc(r) ;
+          let <- defs.foldLeftM(b)(makeLet) 
+        } yield let
 
       case Conditional(c, t, e, _) => for {
         imC <- enc(c);

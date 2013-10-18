@@ -59,11 +59,16 @@ trait IMSyntax {
   case class IMLet(n : IMName, d : IMCode, rhs : IMCode) extends IMCode
   case class IMIf(cond : IMCode, th : IMCode, el : IMCode) extends IMCode
 
+  case class IMSimpleMatch(input : IMName, alternatives : List[SimplePattern]) extends IMCode
+
+  sealed case class SimplePattern(className : ClassName, tag : String, 
+                                  names : List[IMName], rhs : IMCode)
+
   case class IMConstInt(value: Int) extends IMCode
   case class IMConstChar(value: Char) extends IMCode
   case class IMConstString(value: String) extends IMCode
   case class IMConstReal(value: Double) extends IMCode
-  
+  case class IMMatchFail(constructor : String) extends IMCode
   
   sealed abstract class IMType
   case object TDouble extends IMType
@@ -75,6 +80,9 @@ trait IMSyntax {
   
   sealed abstract class IMClass(val name : ClassName)
   case class IMDataClass(override val name : ClassName, fields : List[ClassField]) extends IMClass(name)
-  case class IMClosureClass(override val name : ClassName, fields : List[ClassField], appl : IMCode) extends IMClass(name)
+  case class IMClosureClass(override val name : ClassName, 
+                            closedFields : List[ClassField], 
+                            args : Int, 
+                            rhs : IMCode) extends IMClass(name)
 
 }

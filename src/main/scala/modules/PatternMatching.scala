@@ -28,14 +28,32 @@
 
 package de.tuberlin.uebb.sl2.modules
 
-trait IMEncoder {
-  this : Syntax with IMSyntax with PatternMatching =>
+/**
+  * The pattern matching trait.
+  */
+trait PatternMatching {
 
-  sealed case class IMEncodingEnv(currentModule : ClassName, 
-                                  localNames : Set[String],                                  
-                                  modules : Map[String, ClassName],
-                                  data : PatternMatchingCtxt)
+  this : Syntax  =>
 
-  def encode(env: IMEncodingEnv, s : Expr) : (IMCode, List[IMClass])
+  sealed case class Equation(pattern : List[Pattern], rhs : Expr)
+
+  /**
+    *  The context of pattern simplification.
+    *  arity is a map of constructors to the number of required arguments.
+    *  constructors maps each constructor to all constructors of the respective data type.
+    */
+  sealed case class PatternMatchingCtxt(arity : ConVar => Int, 
+                                       constructors : ConVar => Set[ConVar],
+                                       k : Int)
+
+  /**
+    * Transform an arbitrary set of pattern equations into a simple CASE expression:
+    * CASE Expr OF Con u1 ... u_n THEN Expr
+    * (the resulting case expression may not contain nested patterns)
+    */
+  def createSimpleCaseMatch(ctxt : PatternMatchingCtxt, 
+                            in : List[Equation], variables : List[Var]) : Expr
+
+  def alt2Equation(a : Alternative) = Equation(a.pattern::Nil, a.expr)
 
 }

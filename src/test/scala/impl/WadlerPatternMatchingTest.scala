@@ -24,18 +24,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- */
+ * */
 
-package de.tuberlin.uebb.sl2.modules
+package de.tuberlin.uebb.sl2.tests.impl
 
-trait IMEncoder {
-  this : Syntax with IMSyntax with PatternMatching =>
+import de.tuberlin.uebb.sl2.modules.{Syntax}
+import de.tuberlin.uebb.sl2.impl.{WadlerPatternMatching}
+import de.tuberlin.uebb.sl2.tests.specs._
 
-  sealed case class IMEncodingEnv(currentModule : ClassName, 
-                                  localNames : Set[String],                                  
-                                  modules : Map[String, ClassName],
-                                  data : PatternMatchingCtxt)
-
-  def encode(env: IMEncodingEnv, s : Expr) : (IMCode, List[IMClass])
+class WadlerPatternMatchingTest extends PatternMatchingSpec with WadlerPatternMatching with Syntax {
 
 }
