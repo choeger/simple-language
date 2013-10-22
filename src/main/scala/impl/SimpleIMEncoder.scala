@@ -55,7 +55,7 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPat
     for (s <- get) yield base $ s.classes.size.toString
   }
 
-  def freshName : Encoder[IMName] = {
+  def freshVarName : Encoder[IMName] = {
     for (s <- get[IMEncodingState]; c=s.freshName; _ <- put(s.copy(freshName=c+1))) yield "#tmp_"+c
   }
 
@@ -132,7 +132,7 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPat
 
       case Case(e, as, _) => {
         for {
-          name <- freshName ;
+          name <- freshVarName ;
           matchee <- enc(e) ;
           simplified = createSimpleCaseMatch(env.data, as map alt2Equation, Var(name)::Nil ) ;
           simpleMatch <- case2SimpleMatch(simplified)
