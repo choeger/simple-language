@@ -42,9 +42,18 @@ trait PatternMatching {
     *  arity is a map of constructors to the number of required arguments.
     *  constructors maps each constructor to all constructors of the respective data type.
     */
-  sealed case class PatternMatchingCtxt(arity : ConVar => Int, 
-                                       constructors : ConVar => Set[ConVar],
-                                       k : Int)
+  sealed case class PatternMatchingCtxt(arity : Map[ConVar,Int] = Map(), 
+                                       constructors : Map[ConVar, Set[ConVar]] = Map(),
+                                       k : Int = 0) {
+    def +(o : PatternMatchingCtxt) = {
+      PatternMatchingCtxt(arity ++ o.arity, constructors ++ o.constructors, k)
+    }
+
+    def ++(o : Seq[PatternMatchingCtxt]) = {
+      (this /: o)(_ + _)
+    }
+
+  }
 
   /**
     * Transform an arbitrary set of pattern equations into a simple CASE expression:
