@@ -1,23 +1,47 @@
 package de.tuberlin.uebb.sl2.impl
 
 import de.tuberlin.uebb.sl2.modules._
-import java.io.File
-import scala.io.Source
-import java.net.URL
+import scalax.file._
+
+import java.net.URLClassLoader
 
 trait ModuleResolverImpl extends ModuleResolver {
   this: Syntax
-  with AbstractFile
   with Errors
   with Configs
   with SignatureSerializer =>
 
-  def standardLibName = "std"
-  def standardLibUrl = "/lib/" 
-    
-  case class ImportError(what: String, where: Attribute) extends Error {
-    override def toString = where.toString + ": " + what + "\n"
+  /**
+   * Iterate the class loader hierarchy until an URLClassLoader is found
+   */
+  def getURLClassLoader(cl : ClassLoader) : Option[URLClassLoader] = {
+    if (cl == null) None
+    else 
+      if (cl.isInstanceOf[URLClassLoader])
+	Some(cl.asInstanceOf[URLClassLoader])
+      else
+	getURLClassLoader(cl.getParent)
   }
+
+  /**
+   * Search for the standard library in the (accessible) class path
+   */
+  lazy val fixedStandardLibPath = {
+    val loader = getURLClassLoader(this.getClass.getClassLoader)
+    val urls  = (loader map (l => l.getURLs.toList)).getOrElse(Nil)
+
+    val package_dirs = for (url <- urls ; 
+			    op = Path(url.toURI) ; 
+			    p <- op ; 
+			    if (p / standardLibName).isDirectory) 
+		       yield p
+
+    package_dirs.headOption.getOrElse(Path())
+  }    
+
+  def standardLibName = "std"
+  
+  def standardLibPath = fixedStandardLibPath
 
   def inferDependencies(program: AST, config: Config) : Either[Error, List[ResolvedImport]] = program match {
     case Program(imports, _, _, _, _, attribute) =>
@@ -143,41 +167,33 @@ trait ModuleResolverImpl extends ModuleResolver {
       ) yield ResolvedExternImport(path, file, ei)
   }
 
-  def findImportResource(path: String, config: Config, attr: Attribute): Either[Error, AbstractFile] = {
-    val url = getLibResource("")
-    val file = createFile(url, path)
-    if(url == null && !file.canRead()) {
-    	Left(ImportError("Could not find resource " + quote(standardLibUrl+path), attr))
+  def findImportResource(path: String, config: Config, attr: Attribute): Either[Error, Path] = {
+    val file:Path = standardLibPath / path
+    if(!file.canRead) {
+    	Left(ImportError("Could not find resource " + quote(file.path), attr))
     } else {
-	    val files = List(file,
-	        createFile(config.classpath, path), // the last two paths are necessary to compile the std. libraries
-	        createFile(config.destination, path))
-	    files.find(_.canRead).toRight(
-	      ImportError("Could not find resource " + quote(path)+ " at " + files.map(_.path).mkString("\n\t\t\t\tor "), attr))
+      val files = file::(config.classpath / path):: // the last two paths are necessary to compile the std. libraries
+      (config.destination / path) :: Nil
+      files.find(_.canRead).toRight(
+	ImportError("Could not find resource " + quote(path)+ " at " + files.map(_.path).mkString("\n\t\t\t\tor "), attr))
     }
   }
   
-  def findImport(config: Config, path: String, attr: Attribute): Either[Error, AbstractFile] = {
+  def findImport(config: Config, path: String, attr: Attribute): Either[Error, Path] = {
     val stdPrefix = standardLibName + "/" // TODO: Do this less rigidly
     if (stdPrefix == path.substring(0, stdPrefix.length)) {
       findImportResource(path.substring(stdPrefix.length), config, attr)
     } else {
-      val files = List(createFile(config.classpath, path),
-        createFile(config.destination, path),
-        createFile(config.mainParent, path),
-        createFile(new File("."), path))
-      files.find(_.canRead()).toRight(
+      val files = (config.classpath / path)::(config.destination / path)::
+                  (config.mainParent / path)::(Path(".") / path)::Nil
+      files.find(_.canRead).toRight(
         ImportError("Could not find " + quote(path) + " at " + files.map(_.path).mkString("\n\t\t\t\tor "), attr))
     }
   }
 
-  def importSignature(file: AbstractFile): Either[Error, Program] = {
-    val json = file.contents
-    val signature = deserialize(json, FileLocation(file.filename, null, null))
-    if (null == signature) {
-      Left(ImportError("Failed to load signature " + file, EmptyAttribute))
-    } else {
-      Right(signature.asInstanceOf[Program])
-    }
+  def importSignature(file: Path): Either[Error, Program] = {
+    val json = file.string    
+    for(signature <- deserialize(json, FileLocation(file.path, null, null)).right      
+    ) yield signature.asInstanceOf[Program]
   }
 }

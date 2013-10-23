@@ -17,7 +17,7 @@ trait SignatureSerializerSpec extends FunSpec with ShouldMatchers with Parboiled
     def parsedSerializedAndDeserialized() = {
       val ast = parseAst(s).right.get
       val serialized = serialize(ast)
-      val deserialized = deserialize(serialized)
+      val deserialized = deserialize(serialized).right.get
       
       ParseSerializeDeserializeResult(ast, serialized, deserialized)
     }

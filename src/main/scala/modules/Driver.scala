@@ -33,5 +33,5 @@ package de.tuberlin.uebb.sl2.modules
   */
 trait Driver {
   self: Parser with Syntax with ProgramChecker with Errors with Configs =>
-  def run(config: Config): Either[Error, String]
+  def run(config: Config): Either[Error, List[Unit]]
 }

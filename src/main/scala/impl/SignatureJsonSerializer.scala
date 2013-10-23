@@ -3,16 +3,21 @@ package de.tuberlin.uebb.sl2.impl
 import scala.util.parsing.json._
 import de.tuberlin.uebb.sl2.modules.{ SignatureSerializer, Syntax, Errors }
 
+import scalax.file.Path
+
 trait SignatureJsonSerializer extends SignatureSerializer with Syntax with Errors {
 
   def serialize(ast : AST) : String = ast2Json(ast).toString
   
-  def deserialize(jsonString : String, location : Location = NoLocation) : AST = {
-    JSON.parseFull(jsonString) match {
+  def deserialize(input : String, location : Location = NoLocation) : Either[Error, AST] = {
+    JSON.parseFull(input) match {
       case Some(result) =>
         val jsonAst = result.asInstanceOf[JsonImportAst]
-        json2Ast(jsonAst, location)
-      case None => null
+        Right(json2Ast(jsonAst, location))
+      case None => location match {
+        case FileLocation(file,_,_) => Left(ImportError("Failed to load signature " + file, EmptyAttribute))
+        case _ => Left(ImportError("Failed to load signature from unknown source.", EmptyAttribute))
+      }
     }
   }
   

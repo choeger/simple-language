@@ -43,12 +43,12 @@ trait ModuleLinearization
       // load std/ library from resources directory
       val nameEnd = name.replace(standardLibName+"/", "")
       val stdSource = getLibResource(nameEnd + ".sl")
-      if (stdSource == null)
+      if (stdSource.isFile)
         Left(GenericError("Could not find source of standard library: "
-          + quote((standardLibPath / name).toString)))
+          + quote(stdSource.toString)))
       else {
-        val p = Path(stdSource)
-        Right(Module(nameEnd, p, p.sibling(nameEnd + "sl.signature"), p.sibling(nameEnd + ".sl.js")))
+        Right(Module(nameEnd, stdSource, stdSource.sibling(nameEnd + "sl.signature"), 
+                     stdSource.sibling(nameEnd + ".sl.js")))
       }
     } else {
       // load ordinary files relative to source- and classpath

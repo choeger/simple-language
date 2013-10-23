@@ -28,8 +28,7 @@
 
 package de.tuberlin.uebb.sl2.modules
 
-import java.io.File
-import java.net.URL
+import scalax.file.Path
 
 /**
   * The module defining the structured error representation.
@@ -88,7 +87,7 @@ trait Errors {
   case class CircularDependencyError(what: String) extends Error
   
   /* Multi driver: file not found */
-  case class FileNotFoundError(file: String) extends Error
+  case class FileNotFoundError(file: Path) extends Error
   case class FilesNotFoundError(details: String, file1: String, file2: String) extends Error
   
   /* Type checker: undefined element error */
@@ -111,6 +110,9 @@ trait Errors {
     override def message = what
   }
 
+  case class ImportError(what: String, where: Attribute) extends Error {
+    override def toString = where.toString + ": " + what + "\n"
+  }
 
   /**
     * Wrapper for convenient access to an error message and its location in pattern matching. 

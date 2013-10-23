@@ -32,8 +32,8 @@ import scala.collection.mutable.ListBuffer
 import de.tuberlin.uebb.sl2.modules._
 import de.tuberlin.uebb.sl2.impl._
 import de.tuberlin.uebb.sl2.modules.Syntax.{VarFirstClass}
-import scala.io.Source
-import java.io.File
+
+import scalax.file.Path
 
 object Main
     extends CombinatorParser 
@@ -95,9 +95,9 @@ object Main
   }
   
   def parseArguments(args: List[String]): Config = args match {
-  	case "-d" :: dir ::  rt => parseArguments(rt).copy(destination = new File(dir))
-  	case "-cp" :: dir :: rt => parseArguments(rt).copy(classpath = new File(dir))
-  	case "-sourcepath" :: dir :: rt => parseArguments(rt).copy(sourcepath = new File(dir))
+  	case "-d" :: dir ::  rt => parseArguments(rt).copy(destination = Path(dir))
+  	case "-cp" :: dir :: rt => parseArguments(rt).copy(classpath = Path(dir))
+  	case "-sourcepath" :: dir :: rt => parseArguments(rt).copy(sourcepath = Path(dir))
   	case src ::  rt => {
   		val res = parseArguments(rt)
   		res.copy(sources = src :: res.sources)
@@ -105,5 +105,5 @@ object Main
     case Nil => defaultConfig
   }
   
-  val defaultConfig: Config = Config(null, List(), null, "", new File(""), null)
+  val defaultConfig: Config = Config(null, List(), null, "", Path(), null)
 }

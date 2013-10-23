@@ -61,24 +61,21 @@ trait MultiDriver extends Driver {
     *  Run a transitive module check
     *  As a side effect, this method creates .signature files.
     */
-  override def run(config: Config): Either[Error, String] = {    
+  override def run(config: Config): Either[Error, List[Unit]] = {    
      for (
       // load all (indirectly) required modules
-      modules <-  errorMap(config.sources, {src => 
+      modules <- errorMap(config.sources, {src:String => 
         createModuleFromSourceFile(src, config)}).right ;
 
       // load dependencies
-      dependencyList <- errorMap(modules, { mod => loadModuleDependencies(mod, config) }).right ;
-      dependencies = Map() ++ dependencies ;
+      dependencyList <- errorMap(modules, { mod:Module => loadModuleDependencies(mod, config) }).right ;
 
       // sort topologically
-      sortedModules <- topoSort(dependencies).right ;
+      sortedModules <- topoSort((Map[Module,Set[Module]]() /: dependencyList)(_++_)).right ;
       _ <- ensureDirExists(config.destination).right ;
 
       // compile in topological order
-      ordered <- sortedModules;
-
-      results <- errorMap(ordered.toSeq.toList, handleSource(_ :Module, config)).right)
+      results <- errorMap(sortedModules.toSeq.toList, handleSource(_ :Module, config)).right)
      yield results
   }
   
@@ -108,26 +105,30 @@ trait MultiDriver extends Driver {
    * <li>Otherwise create a module that is not to be compiled.</li>    
    */
   def findModule(importedBy: Module, name: String, config: Config):Either[Error,Module] = {
-    try {
-	    val module = moduleFromName(name, config)
-	    if(!module.signature.canRead) {
-	    	// no signature file exists
-	    	if(module.source.canRead) {
-	    	    Right(module.copy(compile = true))
-	    	} else {
-	    		Left(FilesNotFoundError("Module "+name+" imported by "+importedBy.name+" not found: ",
-	    				module.source.path, module.signature.path))
-	    	}
-	    } else if(module.source.canRead() &&
-	              (module.source.lastModified() > module.signature.lastModified())) {
-	    	// a signature file exists, as well as a source file
-	        Right(module.copy(compile = true))
-	    } else {
-	    	// a signature, but no source file exists: load from signature
-	    	Right(module)
-	    }
-    } catch {
-      case ioe: IOException => Left(GenericError(ioe.getMessage()))
+    for (
+      module <- moduleFromName(name, config).right ;
+      checked <- checkNeedsCompilation(importedBy, module, name, config)
+    ) yield checked
+  }
+
+  def checkNeedsCompilation(i : Module, m : Module, n : String, c : Config) : Either[Error, Module] = {
+    if(!m.signature.canRead) {
+      // no signature file exists
+      if(m.source.canRead) {
+	Right(m.copy(compile = true))
+      } else {
+	Left(FilesNotFoundError("Module "+n+" imported by "+ i.name+ " not found: ",
+	    			m.source.path, m.signature.path))
+      }
+    } else {
+      if(m.source.canRead &&
+	 (m.source.lastModified > m.signature.lastModified)) {
+	   // a signature file exists, as well as a source file
+	   Right(m.copy(compile = true))
+	 } else {
+	   // a signature, but no source file exists: load from signature
+	   Right(m)	   
+         }
     }
   }
   
@@ -135,12 +136,14 @@ trait MultiDriver extends Driver {
    * Create a module to be compiled from its source file.
    */
   def findModuleFromSource(name: String, config: Config): Either[Error,Module] = {
-    val module = moduleFromName(name, config)
-	if(module.source.canRead) {
-	    Right(module.copy(compile = true))
-	} else {
-		Left(FileNotFoundError(module.source.path))
-	}
+    for (
+      module <- moduleFromName(name, config).right ;
+      result <- (if(module.source.canRead) {
+	Right(module.copy(compile = true))
+      } else {
+	Left(FileNotFoundError(module.source))
+      }).right 
+      ) yield result
   }
 
   /**
@@ -149,7 +152,7 @@ trait MultiDriver extends Driver {
    * be compiled.
    */
   def loadModuleDependencies(module: Module, config: Config,
-      dependencies: Map[Module,Set[Module]]):
+      dependencies: Map[Module,Set[Module]] = Map()):
       Either[Error, Map[Module,Set[Module]]] = {
     if((dependencies contains module) || !module.compile) {
       Right(dependencies)
@@ -172,10 +175,9 @@ trait MultiDriver extends Driver {
    */
   def getDirectDependencies(module: Module, config: Config): Either[Error, Set[Module]] = {
     // load input file
-    val code = module.source.contents
+    val code = module.source.string
 
     // parse the syntax
-    fileName = module.source.path
     val ast = parseAst(code)
     
     // resolve dependencies
@@ -193,9 +195,10 @@ trait MultiDriver extends Driver {
     //TODO: move main marking to Module?
     val isMain = inputConfig.sources.contains(name+".sl")
     val destination = inputConfig.destination
-    val config = inputConfig.copy(mainName = module.source.filename, 
-      mainParent = module.source.parent, destination = destination)
-    val code = module.source.contents
+    val config = inputConfig.copy(mainName = module.source.name, 
+                                  mainParent = module.source.parent.get, 
+                                  destination = destination)
+    val code = module.source.string
     
     for (
       moq <- qualify(name, code, config).right;      

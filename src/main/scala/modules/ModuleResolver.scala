@@ -49,11 +49,11 @@ trait ModuleResolver {
   
   def checkImports(imports : List[Import]) : Either[Error, Unit]
 
-  def findImportResource(path: String, config: Config, attr: Attribute): Either[Error, AbstractFile]
+  def findImportResource(path: String, config: Config, attr: Attribute): Either[Error, Path]
 
   def standardLibName: String
 
   def standardLibPath: Path
 
-  def getLibResource(path: String) = getClass().getResource(standardLibPath / path)
+  def getLibResource(path: String) : Path = standardLibPath / path
 }
