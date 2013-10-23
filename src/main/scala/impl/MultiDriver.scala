@@ -32,22 +32,14 @@ import scala.collection.mutable.ListBuffer
 import scala.text.Document
 import scala.text.DocText
 import de.tuberlin.uebb.sl2.modules._
-import java.io.BufferedReader
-import java.io.File
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.io.IOException
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.net.URI
-import java.net.URL
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.nio.file.StandardCopyOption
 import scala.io.Source
 import scalax.io.JavaConverters._
 import scalax.io._
+import scalax.file._
+
+import java.net.URL;
+import scalaz._
+import Scalaz._
 
 /**
  * A driver that is able to compile more than one source file
@@ -55,7 +47,6 @@ import scalax.io._
  */
 trait MultiDriver extends Driver {
   self: Parser
-    with AbstractFile
   	with Syntax
   	with ProgramChecker
   	with Errors
@@ -64,30 +55,31 @@ trait MultiDriver extends Driver {
   	with ModuleResolver
   	with ModuleNormalizer
   	with ModuleLinearization =>
-	
-  override def run(config: Config): Either[Error, String] = {
-    // load all (indirectly) required modules
-    val modules = for(src <- config.sources) yield createModuleFromSourceFile(src, config)
-    val errors = modules.filter(_.isLeft)
-    if(errors.size > 0)
-    	return Left(ErrorList(errors.map(_.left.get)))
-    val dependencies = loadDependencies(modules, config, Map())    
-    if(dependencies.isLeft) {
-    	Left(dependencies.left.get)
-      } else {
-    	// sort topologically
-	    val sortedModules = topoSort(dependencies.right.get)
-	    ensureDirExists(config.destination)
-	    // compile in topological order
-	    val result =(for(modules <- sortedModules.right;
-	    		     results <- errorMap(modules.toSeq.toList,
-	    		    		 		handleSource(_ :Module, config)).right) yield "")
-	    if(result.isLeft) {
-	      result
-	    } else {
-	      Right("compilation successful")
-	    }
-    }
+
+
+  /**
+    *  Run a transitive module check
+    *  As a side effect, this method creates .signature files.
+    */
+  override def run(config: Config): Either[Error, String] = {    
+     for (
+      // load all (indirectly) required modules
+      modules <-  errorMap(config.sources, {src => 
+        createModuleFromSourceFile(src, config)}).right ;
+
+      // load dependencies
+      dependencyList <- errorMap(modules, { mod => loadModuleDependencies(mod, config) }).right ;
+      dependencies = Map() ++ dependencies ;
+
+      // sort topologically
+      sortedModules <- topoSort(dependencies).right ;
+      _ <- ensureDirExists(config.destination).right ;
+
+      // compile in topological order
+      ordered <- sortedModules;
+
+      results <- errorMap(ordered.toSeq.toList, handleSource(_ :Module, config)).right)
+     yield results
   }
   
   def createModuleFromSourceFile(fileName: String, config: Config):Either[Error,Module] = {
@@ -150,20 +142,6 @@ trait MultiDriver extends Driver {
 		Left(FileNotFoundError(module.source.path))
 	}
   }
-  
-  /**
-   * Resolves the direct and transient dependencies of the given modules
-   */
-  def loadDependencies(modules: List[Either[Error,Module]], config: Config,
-      dependencies: Map[Module,Set[Module]]):
-      Either[Error,Map[Module,Set[Module]]] = modules match {
-    case Left(e) :: rt => Left(e)
-    case Right(m) :: rt => {
-      val newDeps = loadModuleDependencies(m, config, dependencies)
-      newDeps.right.flatMap(loadDependencies(rt, config, _))
-    }
-    case Nil => Right(dependencies)
-  }
 
   /**
    * Resolves the direct and transient dependencies of the given module,
@@ -211,11 +189,12 @@ trait MultiDriver extends Driver {
   def handleSource(module: Module, inputConfig: Config) = {
     // load input file
     val name = module.name
-    println(inputConfig.sources+", "+name)
+
     //TODO: move main marking to Module?
     val isMain = inputConfig.sources.contains(name+".sl")
     val destination = inputConfig.destination
-    val config = inputConfig.copy(mainName = module.source.filename, mainParent = module.source.parent, destination = destination)
+    val config = inputConfig.copy(mainName = module.source.filename, 
+      mainParent = module.source.parent, destination = destination)
     val code = module.source.contents
     
     for (
@@ -243,106 +222,40 @@ trait MultiDriver extends Driver {
     ) yield qualifyUnqualifiedModules(mo.asInstanceOf[Program], imports)
   }
   
-  def ensureDirExists(dir: File) = {
+  def ensureDirExists(dir: Path) : Either[Error, Path] = {
     // Create directory, if necessary
-    if(!dir.exists()) {
-      if(dir.mkdirs()) {
-        println("Created directory "+dir)
-      } else {
-        println("Could not create directory"+dir)
-      }
-    } else if(!dir.isDirectory()) {
-    	println(dir+" is not a directory")
+    try {
+      Right(dir.createDirectory(failIfExists = false))
+    } catch {
+      case e:Throwable => Left(GenericError(e.getMessage))
     }
   }
   
-  def outputToFiles(program: Program, name: String, config: Config): Either[Error, String] = {    
-    val modulesDir = config.destination    
-    
+  def outputToFiles(program: Program, name: String, config: Config): Either[Error, Unit] = {    
     // write compiled external signature file
-    val signatureFile = new File(modulesDir, name + ".sl.signature")
-    val writerSig = new PrintWriter(signatureFile)
-    writerSig.write(serialize(program))
-    writerSig.close()
+    val signatureFile = config.destination / (name + ".sl.signature")
+    signatureFile.write(serialize(program))
     
-    return Right("compilation successful")
-  }
-    
-  def insertExternallyImported(name: String, moduleWriter: PrintWriter, imports: List[ResolvedImport]) {
-    for(i <- imports.filter(_.isInstanceOf[ResolvedExternImport])) {
-      val imp = i.asInstanceOf[ResolvedExternImport]
-      val includedCode = imp.file.contents
-      moduleWriter.println("/***********************************/")
-      moduleWriter.println("// included from: "+imp.file.path)
-      moduleWriter.println("/***********************************/")
-      moduleWriter.println(includedCode)
-      moduleWriter.println("/***********************************/")
-    }
-    moduleWriter.println("/***********************************/")
-    moduleWriter.println("// generated from: "+name)
-    moduleWriter.println("/***********************************/") 
-  }
-  
-  def getLibURL(config: Config):Either[Error,URL] = {
-	  val libURL = getClass().getResource("/lib/")
-      if(libURL == null) {
-    	  Left(GenericError("Cannot compile: Standard library "+quote("/lib/")+" not found."))
-      } else {
-	      val libFile = createFile(libURL)
-	      if(libFile.isInstanceOf[BottledFile]) {
-	        val jarName = libFile.asInstanceOf[BottledFile].jarFile
-	        val jar = new java.util.jar.JarFile(jarName)
-	        val libEntry = jar.getJarEntry("/lib/")
-	        val entries = jar.entries
-	        while(entries.hasMoreElements()) {
-	          val entry = entries.nextElement()
-	          if(entry.getName.matches("^lib/.*\\.(signature|js)$")) {
-	        	  copyResource(jar.getInputStream(entry),
-	        	      jarName+"!"+entry.getName(),
-	        	      new URI(config.destination.toURI.toString+entry.getName))
-	          }
-	        }
-	        Right(new File(config.destination, "/lib/").toURI.toURL)
-	      } else {
-	        Right(new File(libFile.path).toURI.toURL)
-	      }
-      }
-  }
-  
-  def copyResource(resourceName: String, to: URI):Unit = {
-    copyResource(getClass().getResourceAsStream(resourceName),
-        resourceName, to)
-  }
-  
-  def copyResource(in: InputStream, inLabel: String, out: URI):Unit = {
-	  val pathOption = scalax.file.Path(out)
-	  if(pathOption.isDefined && !pathOption.get.exists) {
-	    println("Copying "+inLabel+" to "+pathOption.get.path)
-	    pathOption.get.createFile(true, true)
-	    pathOption.get.doCopyFrom(Resource.fromInputStream(in))
-	  }
+    Right(())
   }
 
-  def mergeAst(a: Program, b: Program): Either[Error, Program] =
-    {
-      for (
-        sigs <- mergeMap(a.signatures, b.signatures).right;
-        funs <- mergeMap(a.functionDefs, b.functionDefs).right;
-        funsEx <- mergeMap(a.functionDefsExtern, b.functionDefsExtern).right
-      ) yield {
-        val defs = a.dataDefs ++ b.dataDefs
-        Program(List(), sigs, funs, funsEx, defs)
-      }
-
+  def mergeAst(a: Program, b: Program): Either[Error, Program] = {
+    for (
+      sigs <- mergeMap(a.signatures, b.signatures).right;
+      funs <- mergeMap(a.functionDefs, b.functionDefs).right;
+      funsEx <- mergeMap(a.functionDefsExtern, b.functionDefsExtern).right
+    ) yield {
+      val defs = a.dataDefs ++ b.dataDefs
+      Program(List(), sigs, funs, funsEx, defs)
     }
+  }
 
-  def mergeMap[A, B](a: Map[A, B], b: Map[A, B]): Either[Error, Map[A, B]] =
-    {
-      val intersect = a.keySet & b.keySet
-      if (intersect.isEmpty)
-        Right(a ++ b)
-      else
-        Left(DuplicateError("Duplicated definition: " + intersect.mkString(", "), "", Nil))
-    }
+  def mergeMap[A, B](a: Map[A, B], b: Map[A, B]): Either[Error, Map[A, B]] = {
+    val intersect = a.keySet & b.keySet
+    if (intersect.isEmpty)
+      Right(a ++ b)
+    else
+      Left(DuplicateError("Duplicated definition: " + intersect.mkString(", "), "", Nil))
+  }
 }
 

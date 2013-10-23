@@ -1,7 +1,6 @@
 package de.tuberlin.uebb.sl2.modules
 
-import java.io.File
-import java.net.URL
+import scalax.file.Path;
 
 /**
  * A ModuleResolver is able to find and load the modules a program
@@ -9,25 +8,24 @@ import java.net.URL
  */
 trait ModuleResolver {
   this: Syntax
-  with AbstractFile
   with Errors
   with Configs =>
 
   sealed abstract class ResolvedImport(
       val path:String,
-      val file:AbstractFile,
+      val file:Path,
       val ast:Import)
   
   sealed abstract class ResolvedModuleImport(
       val name:String,
       override val path:String,
-      override val file:AbstractFile,
+      override val file:Path,
       val signature:Program,
       override val ast:Import) extends ResolvedImport(path, file, ast)
       
   case class ResolvedUnqualifiedImport(
       override val path: String,
-      override val file: AbstractFile,
+      override val file: Path,
       override val signature: Program,
       override val ast: UnqualifiedImport) extends ResolvedModuleImport(
           "$$"+path.replace('/', '$'), path, file, signature, ast)
@@ -35,14 +33,14 @@ trait ModuleResolver {
   case class ResolvedQualifiedImport(
       override val name: ModuleVar,
       override val path: String,
-      override val file: AbstractFile,
+      override val file: Path,
       override val signature: Program,
       override val ast: QualifiedImport)
     extends ResolvedModuleImport(name, path, file, signature, ast)
     
   case class ResolvedExternImport(
       override val path: String,
-      override val file: AbstractFile,
+      override val file: Path,
       override val ast: ExternImport)
     extends ResolvedImport(path, file, ast)
     
@@ -54,6 +52,8 @@ trait ModuleResolver {
   def findImportResource(path: String, config: Config, attr: Attribute): Either[Error, AbstractFile]
 
   def standardLibName: String
-  def standardLibUrl: String
-  def getLibResource(path: String) = getClass().getResource(standardLibUrl + path)
+
+  def standardLibPath: Path
+
+  def getLibResource(path: String) = getClass().getResource(standardLibPath / path)
 }

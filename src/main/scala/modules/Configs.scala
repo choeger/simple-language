@@ -1,13 +1,13 @@
 package de.tuberlin.uebb.sl2.modules
 
-import java.io.File
+import scalax.file._;
 
 trait Configs {
   case class Config(
     /**
      * where to look for source files
      */
-    val sourcepath: File,
+    val sourcepath: Path,
     /**
      * which source files at source path to compile
      */
@@ -18,7 +18,7 @@ trait Configs {
      * if its not, manual changes to the requirejs-config might
      * be needed.)
      */
-    val classpath: File,
+    val classpath: Path,
     /**
      * the simple name of the main file compiled
      */
@@ -26,10 +26,10 @@ trait Configs {
     /**
      * the parent directory of the main file compiled
      */
-    val mainParent: File,
+    val mainParent: Path,
     /**
      * where to put the compiled files from source.
      */
-    val destination: File
+    val destination: Path
  )
 }

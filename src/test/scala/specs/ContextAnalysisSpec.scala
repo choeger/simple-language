@@ -32,7 +32,8 @@ import org.scalatest.matchers._
 import org.scalatest.FunSpec
 import de.tuberlin.uebb.sl2.modules._
 import de.tuberlin.uebb.sl2.specs.SLPrelude
-import java.io.File
+
+import scalax.file._;
 
 trait ContextAnalysisSpec extends FunSpec with ShouldMatchers {
 
@@ -44,7 +45,7 @@ trait ContextAnalysisSpec extends FunSpec with ShouldMatchers {
   def notFail: Matcher[Either[Error, Unit]] = be(Right())
   
   def checking(program: AST): Either[Error, Unit] = {
-    val emptyConfig = Config(null, List(), new File("src/main/resources/lib"), "", new File(""), new File(""))
+    val emptyConfig = Config(null, List(), Path("src/main/resources/lib"), "",  Path(""), Path(""))
     
     for (
       imports <- inferDependencies(program, emptyConfig).right;
