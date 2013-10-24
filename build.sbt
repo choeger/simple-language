@@ -17,6 +17,7 @@ libraryDependencies ++= Seq(
 	"org.parboiled" %% "parboiled-scala" % "1.1.4",
 	"com.googlecode.kiama" %% "kiama" % "1.4.0",
 	"net.sf.jgrapht" % "jgrapht" % "0.8.3",
+        "org.scalaz" %% "scalaz-core" % "7.0.4",
 	"com.github.scala-incubator.io" %% "scala-io-file" % "0.4.2"
 )
 
