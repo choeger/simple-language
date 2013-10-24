@@ -17,7 +17,6 @@ class ModuleContextTest extends
   with Unification
   with NameSupply
   with ParboiledParser
-  with AbstractFile
   with ModuleResolverImpl
   with ModuleNormalizerImpl
   with ModuleContextImpl

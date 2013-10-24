@@ -18,7 +18,6 @@ class ModuleNormalizerTest
   with NameSupply
   with Errors
   with Configs
-  with AbstractFile
   with ModuleResolverImpl
   with SignatureJsonSerializer
 {
