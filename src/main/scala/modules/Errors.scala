@@ -36,8 +36,7 @@ import scalax.file.Path
 trait Errors {
 
   self: Syntax =>
-  
-  abstract class Error extends Throwable {
+  abstract class Error {
     /**
       * Produce an error message.
       */
