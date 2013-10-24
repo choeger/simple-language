@@ -355,13 +355,13 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
     varRegex | wrongTokenType("lower case identifier")
 
   private def checkedModuleIde: Parser[String] =
-    moduleRegex | wrongTokenType("module identifier") ^^ {case s: String => s}
+    moduleRegex | wrongTokenType("module identifier") 
 
   private def checkedTypeIde: Parser[String] =
-    typeRegex | wrongTokenType("type identifier") ^^ {case s: String => s}
+    typeRegex | wrongTokenType("type identifier") 
 
   private def checkedConsIde: Parser[String] =
-    consRegex | wrongTokenType("constructor identifier") ^^ {case s: String => s}
+    consRegex | wrongTokenType("constructor identifier") 
 
   private def wrongTokenType(expected: String): Parser[String] = anyToken ^^! {
       case (a, found) => expected + " expected but " + quote(found) + " found."
