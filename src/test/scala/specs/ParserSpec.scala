@@ -167,14 +167,6 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
       "DEF x ++ y = x".as.ast should parse(functionDef2Modul(("++"), List(FunctionDef(List(patX, patY), varX))))
     }
 
-    it("Should parse inline JavaScript") {
-      """{|alert("Hello!")|}""".as.expr should parse(JavaScript("""alert("Hello!")""", None))
-    }
-
-    it("Should parse inline JavaScript with type annotation") {
-      """{|33|} : (DOM Int)""".as.expr should parse(JavaScript("""33""", Some(TyExpr(Syntax.TConVar("DOM"), TyExpr(Syntax.TConVar("Int"), Nil) :: Nil))))
-    }
-
     it("Should parse function with two definitions") {
       """DEF f Nil = 0 
          DEF f (Cons a b) = 1""".as.ast should parse((functionDef2Modul(("f"), List(

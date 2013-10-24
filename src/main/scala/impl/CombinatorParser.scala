@@ -55,12 +55,13 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
     try {
       parseAll(parseTopLevel, new ParserString(in)) match {
         case Success(result, _) => Right(result)
-        case failure: NoSuccess => 
-//          println("Parser Error: " + failure.toString)
-          Left(convertError(failure)) // HERE IS WHERE THE EXCEPTIONS GET THROWN!
+        case NoSuccess(msg, in1) =>
+          val pos = offsetToPosition(in1.offset)
+          val attr = AttributeImpl(FileLocation(fileName, pos, pos))
+          Left(ParseError(msg, attr))
       }
     } catch {
-      case err: Error => Left(err)
+      //should no longer happen
       case e: Throwable =>
         val baos = new ByteArrayOutputStream()
         e.printStackTrace(new PrintStream(baos))
@@ -72,14 +73,17 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
     try {
       parseAll(expr, new ParserString(in)) match {
         case Success(result, _) => Right(result)
-        case failure: NoSuccess => Left(scala.sys.error(failure.msg))
+        case NoSuccess(msg, in1) =>
+          val pos = offsetToPosition(in1.offset)
+          val attr = AttributeImpl(FileLocation(fileName, pos, pos))
+          Left(ParseError(msg, attr))
       }
     } catch {
-      case err: Error => Left(err)
+      //should no longer happen
       case e: Throwable =>
         val baos = new ByteArrayOutputStream()
         e.printStackTrace(new PrintStream(baos))
-        Left(ParseError("UNEXPECTED ERROR: " + e.getMessage() + "\n" + baos.toString, AttributeImpl(NoLocation))) // TODO: Fix this
+        Left(ParseError("UNEXPECTED ERROR: " + e.getMessage() + "\n" + baos.toString, AttributeImpl(NoLocation)))
     }
   }
 
@@ -153,8 +157,8 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
       }
   }
 
-  def makeError: Parser[AST => AST] = anyToken ^^@ {
-      case (a, found) => throw ParseError("unexpected token: " + quote(found) + "; expected top level definition", a)
+  def makeError: Parser[AST => AST] = anyToken ^^! {
+      case (a, found) => "unexpected token: " + quote(found) + "; expected top level definition"
   }
 
   private def updateMap[T](s: String, t: T, m: Map[String, List[T]]) = m + (s -> (t :: m.get(s).getOrElse(Nil))) 
@@ -207,7 +211,6 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
     | lambda
     | caseParser
     | let
-    | javaScript
     | parentheses
     | exVar | exCon | string | real | num | char | badStmt)
 
@@ -215,7 +218,6 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
   private def lambda: Parser[Lambda] = lambdaLex ~> rep(pat) ~ dotLex ~ expr ^^@ { case (a, p ~ _ ~ e) => Lambda(p, e, a) }
   private def caseParser: Parser[Case] = caseLex ~> expr ~ rep1(alt) ^^@ { case (a, e ~ as) => Case(e, as, a) }
   private def let: Parser[Let] = letLex ~> rep1(localDef) ~ expect(inLex) ~ expr ^^@ { case (a, lds ~ _ ~ e) => Let(lds, e, a) }
-  private def javaScript: Parser[Expr] = ((jsOpenLex ~> """(?:(?!\|\}).)*""".r <~ jsCloseLex) ~ (typeLex ~> parseType?)) ^^@ { case (a, s ~ t) => JavaScript(s, t, a) }
   private def parentheses: Parser[Expr] = "(" ~> expr <~ closeBracket(")")
   private def string: Parser[ConstString] = """"(\\"|[^"])*"""".r ^^@ { (a, s: String) => ConstString(s.substring(1, s.length() - 1), a) }
   private def num: Parser[ConstInt] = """-?\d+""".r ^^@ { case (a, d) => ConstInt(d.toInt, a) }
@@ -331,22 +333,22 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
 
   // Parse errors
   private def closeBracket(bracket: String): Parser[String] =
-    bracket | bracketError(bracket) ^^ {case s: String => s}
+    bracket | bracketError(bracket) 
 
   private def bracketError(expected: String): Parser[String] = 
-    (")" | "]" | "}" | jsCloseLex | funLex | defLex | importLex | dataLex | publicLex | externLex | anyToken) ^^@ {
-      case (a, found) => throw ParseError("unbalanced parentheses: " + quote(expected) + " expected but " + quote(found) + " found.", a)
+    (")" | "]" | "}" | jsCloseLex | funLex | defLex | importLex | dataLex | publicLex | externLex | anyToken) ^^! {
+      case (a, found) => "unbalanced parentheses: " + quote(expected) + " expected but " + quote(found) + " found."
     }
 
   private def expect(expected: String): Parser[String] =
     expected | wrongToken(expected)
 
   private def expect(parser: Parser[String], description: String): Parser[String] =
-    parser | wrongTokenType(description) ^^ {case s: String => s}
+    parser | wrongTokenType(description) 
 
   private def wrongToken(expected: String): Parser[String] = 
-    anyToken ^^@ {
-      case (a, found) => throw ParseError("unexpected token: "+ quote(expected) + " expected but " + quote(found) + " found.", a)
+    anyToken ^^! {
+      case (a, found) => "unexpected token: "+ quote(expected) + " expected but " + quote(found) + " found."
     }
 
   private def checkedVarIde: Parser[String] =
@@ -361,37 +363,37 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
   private def checkedConsIde: Parser[String] =
     consRegex | wrongTokenType("constructor identifier") ^^ {case s: String => s}
 
-  private def wrongTokenType(expected: String): Parser[String] = anyToken ^^@ {
-      case (a, found) => throw ParseError(expected + " expected but " + quote(found) + " found.", a)
+  private def wrongTokenType(expected: String): Parser[String] = anyToken ^^! {
+      case (a, found) => expected + " expected but " + quote(found) + " found."
     }
 
   private def importDefError: Parser[Import] = 
-    importLex ~> anyToken ^^@ {
-      case (a, found) => throw ParseError("malformed import declaration: " + quote(found) + " unexpected.", a)
+    importLex ~> anyToken ^^! {
+      case (a, found) => "malformed import declaration: " + quote(found) + " unexpected."
     }
 
   private def dataDefError: Parser[DataDef] =
-    (publicLex?) ~> dataLex ~> anyToken ^^@ {
-      case (a, found) => throw ParseError("malformed data declaration: " + quote(found) + " unexpected.", a)
+    (publicLex?) ~> dataLex ~> anyToken ^^! {
+      case (a, found) => "malformed data declaration: " + quote(found) + " unexpected."
     }
 
   private def funSigError: Parser[Tuple2[VarName, FunctionSig]] =
-    (publicLex?) ~> funLex ~> anyToken ^^@ {
-      case (a, found) => throw ParseError("malformed function signature: " + quote(found) + " unexpected.", a)
+    (publicLex?) ~> funLex ~> anyToken ^^! {
+      case (a, found) => "malformed function signature: " + quote(found) + " unexpected."
     }
 
   private def funDefError: Parser[(VarName, FunctionDef)] =
-    defLex ~> not(externLex) ~> anyToken ^^@ {
-      case (a, found) => throw ParseError("malformed function definition: " + quote(found) + " unexpected.", a)
+    defLex ~> not(externLex) ~> anyToken ^^! {
+      case (a, found) => "malformed function definition: " + quote(found) + " unexpected."
     }
 
   private def funDefExternError: Parser[(VarName, FunctionDefExtern)] =
-    defLex ~> externLex ~> anyToken ^^@ {
-      case (a, found) => throw ParseError("malformed extern function definition: " + quote(found) + " unexpected.", a)
+    defLex ~> externLex ~> anyToken ^^! {
+      case (a, found) => "malformed extern function definition: " + quote(found) + " unexpected."
     }
 
-  private def badStmt: Parser[Expr] = "." ~> anyToken ^^@ {
-    case (a, found) => throw ParseError("unexpected qualification operator before " + quote(found) + ".", a)
+  private def badStmt: Parser[Expr] = "." ~> anyToken ^^! {
+    case (a, found) => "unexpected qualification operator before " + quote(found) + "."
   } // TODO add here!
 
   private def clearStack(out: Stack[Expr], ops: Stack[Expr]) =
@@ -435,12 +437,6 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
       return EmptyAttribute
   }
 
-  private def convertError(ns: NoSuccess) = ns match {
-    case NoSuccess(msg, in1) => 
-      val pos = offsetToPosition(in1.offset)
-      val attr = AttributeImpl(FileLocation(fileName, pos, pos))
-      throw ParseError(msg, attr)
-  }
 
   private implicit def parser2Attributed[T](p: Parser[T]): AttributedParser[T] = new AttributedParser(p)
   private implicit def regexAttributed(p: Regex): AttributedParser[String] = new AttributedParser(regex(p))
@@ -460,15 +456,30 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
             val att = AttributeImpl(FileLocation(fileName, from, to))
             Success(f(att, t), in1)
           }
-/*
-        case Error(msg, in1) => 
+        case ns: NoSuccess => ns
+      }
+    }
+
+    def ^^![U](f: (Attribute, String) => String): Parser[U] = Parser { in =>
+      val source = in.source
+      val offset = in.offset
+      val start = handleWhiteSpace(source, offset)
+      val inwo = in.drop(start - offset)
+      p(inwo) match {
+        case Success(t, in1) =>
           {
             val from = offsetToPosition(start)
             val to = offsetToPosition(in1.offset)
             val att = AttributeImpl(FileLocation(fileName, from, to))
-            throw ParseError("From CombinatorParser: " + msg, att)
+            Error(f(att, t.toString), in1)
           }
- */
+        case Failure(t, in1) =>
+          {
+            val from = offsetToPosition(start)
+            val to = offsetToPosition(in1.offset)
+            val att = AttributeImpl(FileLocation(fileName, from, to))
+            Failure(f(att, "unknown token or end of source"), in1)
+          }
         case ns: NoSuccess => ns
       }
     }
