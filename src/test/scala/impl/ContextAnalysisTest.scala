@@ -51,7 +51,6 @@ class ContextAnalysisTest
   with SLExpressions
   with Errors
   with Configs
-  with AbstractFile
   with ModuleResolverImpl
   with ModuleNormalizerImpl
   with ModuleContextImpl

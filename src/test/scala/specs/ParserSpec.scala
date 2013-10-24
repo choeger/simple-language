@@ -42,9 +42,9 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
     def as() = Parsing(s)
   }
 
-  def functionDef2Modul(n: VarName, d: List[FunctionDef]): AST = Program(List(), Map.empty, Map(n -> d), Map.empty, Nil)
-  def dataDef2Modul(d: DataDef): AST = Program(List(), Map.empty, Map.empty, Map.empty, List(d))
-  def functionDefs2Modul(d: Map[VarName, List[FunctionDef]]): AST = Program(List(), Map.empty, d, Map.empty, Nil)
+  def functionDef2Modul(n: VarName, d: List[FunctionDef]): AST = Program(List(), Map.empty, Map(n -> d), Nil)
+  def dataDef2Modul(d: DataDef): AST = Program(List(), Map.empty, Map.empty, List(d))
+  def functionDefs2Modul(d: Map[VarName, List[FunctionDef]]): AST = Program(List(), Map.empty, d, Nil)
 
   def exVar(name: String) = ExVar(Syntax.Var(name))
 
@@ -167,24 +167,11 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
       "DEF x ++ y = x".as.ast should parse(functionDef2Modul(("++"), List(FunctionDef(List(patX, patY), varX))))
     }
 
-    it("Should parse inline JavaScript") {
-      """{|alert("Hello!")|}""".as.expr should parse(JavaScript("""alert("Hello!")""", None))
-    }
-
-    it("Should parse inline JavaScript with type annotation") {
-      """{|33|} : (DOM Int)""".as.expr should parse(JavaScript("""33""", Some(TyExpr(Syntax.TConVar("DOM"), TyExpr(Syntax.TConVar("Int"), Nil) :: Nil))))
-    }
-
     it("Should parse function with two definitions") {
       """DEF f Nil = 0 
          DEF f (Cons a b) = 1""".as.ast should parse((functionDef2Modul(("f"), List(
         FunctionDef(List(PatternExpr(Syntax.ConVar("Cons"), List(PatternVar("a"), PatternVar("b")))), ConstInt(1)),
         FunctionDef(List(PatternExpr(Syntax.ConVar("Nil"), Nil)), ConstInt(0))))))
-    }
-    
-    it("Should parse external function definition") {
-      "DEF EXTERN f = {|myJavaScriptFun|}".as.ast should parse(
-          Program(List(), Map.empty, Map.empty, Map("f" -> FunctionDefExtern("myJavaScriptFun")), Nil))
     }
   }
 
@@ -435,7 +422,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
         parse(Program(
           List(),
           Map((strX) -> FunctionSig(FunTy(List(TyExpr(Syntax.TConVar("Int"), Nil), TyExpr(Syntax.TConVar("Int"), Nil))))),
-          Map.empty, Map.empty, Nil))
+          Map.empty, Nil))
     }
     
     it("Should parse simple public function signature") {
@@ -443,7 +430,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
         parse(Program(
           List(),
           Map((strX) -> FunctionSig(FunTy(List(TyExpr(Syntax.TConVar("Int"), Nil), TyExpr(Syntax.TConVar("Int"), Nil))), PublicModifier)),
-          Map.empty, Map.empty, Nil))
+          Map.empty, Nil))
     }
 
     it("Should parse simple constant signature") {
@@ -451,7 +438,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
         parse(Program(
           List(),
           Map((strX) -> FunctionSig(TyExpr(Syntax.TConVar("Int"), Nil))),
-          Map.empty, Map.empty, Nil))
+          Map.empty, Nil))
     }
 
     it("Should function signatures without parentheses") {
@@ -459,7 +446,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
         Program(
           List(),
           Map(("f") -> FunctionSig(FunTy(List(TyVar(strX), TyVar(strY))))),
-          Map(), Map.empty, Nil))
+          Map(),  Nil))
     }
 
     it("Should parse higher order function signature") {
@@ -469,7 +456,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
           Map((strMap) -> FunctionSig(FunTy(List(FunTy(List(TyVar(strX), TyVar(strY))),
             TyExpr(Syntax.TConVar(strList), List(TyVar(strX))),
             TyExpr(Syntax.TConVar(strList), List(TyVar(strY))))))),
-          Map.empty, Map.empty, Nil))
+          Map.empty, Nil))
     }
 
     it("Should parse other  higher order function signature") {
@@ -486,7 +473,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
               TyExpr(Syntax.TConVar("DOM"), List(TyVar("b")))
             ))
           )),
-          Map.empty, Map.empty, Nil))
+          Map.empty, Nil))
     }
 
     it("Should parse higher order function signature without unneccessary parens") {
@@ -503,7 +490,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
               TyExpr(Syntax.TConVar("DOM"), List(TyVar("b")))
             ))
           )),
-          Map.empty, Map.empty, Nil))
+          Map.empty, Nil))
     }
   }
 
@@ -534,7 +521,7 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
         parse(Program(
           List(),
           Map((strX) -> FunctionSig(TyExpr(Syntax.TConVar("Number","Real"), Nil))),
-          Map.empty, Map.empty, Nil))
+          Map.empty, Nil))
     }
 
     val str = """
@@ -560,21 +547,11 @@ trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
         parse(Program(
           List(QualifiedImport("my/test/module","Mtm")),
           Map.empty,
-          Map.empty, Map.empty,
+          Map.empty,
           Nil))
     }
   }
   
-  describe(testedImplementationName() + " Test case 13 : Import Extern statements") {
-    it("should parse extern import statement") {
-      ("IMPORT EXTERN \"my/test/module\"").as.ast should 
-        parse(Program(
-          List(ExternImport("my/test/module")),
-          Map.empty,
-          Map.empty, Map.empty,
-          Nil))
-    }
-  }
 
   //expr01 := (g x)
 

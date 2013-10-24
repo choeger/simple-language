@@ -51,19 +51,19 @@ trait ProgramCheckerImpl extends ProgramChecker {
     for (
       initialContext <- checkDataTypes(in, modules).right;
       fdc <- checkFunctions(in).right ;
-      _ <- { val FDCheckResult(funSigs, funDefs, externContext) = fdc ; 
+      _ <- { val FDCheckResult(funSigs, funDefs) = fdc ; 
             for {
               // remove local definitions from imported module context. (imported unqualified names
               // may otherwise clash with local names. this way they are shadowed.)
               elc <- splitLetRecs(moduleContext.keySet
     		                  -- funSigs.keySet.map(_.asInstanceOf[VarFirstClass])
-    		                  ++ initialContext.keySet ++ externContext.keySet,
+    		                  ++ initialContext.keySet,
                                   programToELC(moduleSigs ++ funSigs, funDefs)).right;
         
               _ <- checkLetRecs(elc).right ;
               mainType <- {
                 checkTypes(moduleContext -- funSigs.keySet.map(_.asInstanceOf[VarFirstClass])
-                           ++ initialContext ++ externContext, elc).right
+                           ++ initialContext, elc).right
               }     
             } yield (checkMain(funSigs, mainType)) 
           }.right

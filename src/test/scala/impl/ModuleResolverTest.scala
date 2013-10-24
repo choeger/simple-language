@@ -6,7 +6,6 @@ import de.tuberlin.uebb.sl2.tests.specs.ModuleResolverSpec
 
 class ModuleResolverTest
   extends ModuleResolverSpec
-  with AbstractFile
   with ModuleResolverImpl
   with Syntax
   with Errors

@@ -33,18 +33,19 @@ trait ModuleResolverImpl extends ModuleResolver {
     val package_dirs = for (url <- urls ; 
 			    op = Path(url.toURI) ; 
 			    p <- op ; 
-			    if (p / standardLibName).isDirectory) 
-		       yield p
-
+			    if (p / "lib" ).isDirectory) 
+		       yield p / "lib"
+    
     package_dirs.headOption.getOrElse(Path())
   }    
+
 
   def standardLibName = "std"
   
   def standardLibPath = fixedStandardLibPath
 
   def inferDependencies(program: AST, config: Config) : Either[Error, List[ResolvedImport]] = program match {
-    case Program(imports, _, _, _, _, attribute) =>
+    case Program(imports, _, _, _, attribute) =>
       checkImports(imports) match {
         case Left(err) => return Left(err)
         case _ =>
@@ -133,7 +134,7 @@ trait ModuleResolverImpl extends ModuleResolver {
    * need to be compiled.
    */
   def resolveDependencies(program: AST, config: Config) : Either[Error, Set[String]] = program match {
-    case Program(imports, _, _, _, _, attribute) =>
+    case Program(imports, _, _, _, attribute) =>
       for(
         _ <- checkImports(imports).right;
         // ignore extern imports
@@ -141,7 +142,6 @@ trait ModuleResolverImpl extends ModuleResolver {
         	(x.isInstanceOf[UnqualifiedImport]) ||
         	(x.isInstanceOf[QualifiedImport])), collectImport(config)).right) 
     	yield resolvedImports.toSet
-    case _ => throw new RuntimeException("")
   }
 
   def collectImport(config: Config)(imp: Import): Either[Error, String] = { Right(imp.path) }
@@ -161,10 +161,6 @@ trait ModuleResolverImpl extends ModuleResolver {
         jsFile <- findImport(config, imp.path + ".sl.js", attr).right;
         signature <- importSignature(file).right
       ) yield ResolvedQualifiedImport(name, path, file, signature, qi)
-    case ei @ ExternImport(path, attr) =>
-      for (
-        file <- findImport(config, imp.path + ".js", attr).right
-      ) yield ResolvedExternImport(path, file, ei)
   }
 
   def findImportResource(path: String, config: Config, attr: Attribute): Either[Error, Path] = {

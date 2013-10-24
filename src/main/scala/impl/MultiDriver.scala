@@ -243,13 +243,12 @@ trait MultiDriver extends Driver {
   }
 
   def mergeAst(a: Program, b: Program): Either[Error, Program] = {
-    for (
-      sigs <- mergeMap(a.signatures, b.signatures).right;
-      funs <- mergeMap(a.functionDefs, b.functionDefs).right;
-      funsEx <- mergeMap(a.functionDefsExtern, b.functionDefsExtern).right
-    ) yield {
+    for {
+      sigs <- mergeMap(a.signatures, b.signatures).right
+      funs <- mergeMap(a.functionDefs, b.functionDefs).right
+    } yield {
       val defs = a.dataDefs ++ b.dataDefs
-      Program(List(), sigs, funs, funsEx, defs)
+      Program(List(), sigs, funs, defs)
     }
   }
 

@@ -75,21 +75,19 @@ trait ModuleNormalizerImpl extends ModuleNormalizer {
   private def normalizeModule(sub : ModuleVar => ModuleVar) : ResolvedImport => ResolvedImport = imp => imp match {
     // normalize only qualified imports
     case ui: ResolvedUnqualifiedImport => ui
-    case ResolvedQualifiedImport(name, path, file, Program(imports, sigs, defs, exts, datas, attrs), ast) =>
+    case ResolvedQualifiedImport(name, path, file, Program(imports, sigs, defs, datas, attrs), ast) =>
       val normImports = normalizeImports(sub)(imports)
       val normSigs    = normalizeSigs   (sub)(sigs   )
       val normDatas   = normalizeDatas  (sub)(datas  )
-      val normProg    = Program(normImports, normSigs, defs, exts, normDatas, attrs)
+      val normProg    = Program(normImports, normSigs, defs, normDatas, attrs)
       
       ResolvedQualifiedImport(name, path, file, normProg, ast)
-    case ei : ResolvedExternImport => ei
   }
   
   private def normalizeImport(sub : ModuleVar => ModuleVar) : Import => Import = imp => imp match {
     // normalize only qualified imports
     case ui : UnqualifiedImport => ui
     case QualifiedImport(path, name, attr) => QualifiedImport(path, sub(name), attr)
-    case ei : ExternImport => ei
   }
   
   private def normalizeSig(sub : ModuleVar => ModuleVar) : FunctionSig => FunctionSig = sig => {
@@ -190,8 +188,6 @@ trait ModuleNormalizerImpl extends ModuleNormalizer {
       }).toMap +
       // add a translation for local modules
       (Syntax.LocalMod -> rqi.path)
-      
-    case _ : ResolvedExternImport => Map()
   }
 
 }

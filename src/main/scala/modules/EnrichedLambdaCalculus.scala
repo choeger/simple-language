@@ -58,7 +58,6 @@ trait EnrichedLambdaCalculus {
   case class ELetRec(definition: List[EDefinition], body: ELC, attribute: Attribute = EmptyAttribute) extends ELC
   case class EChoice(choices: List[ELC], attribute: Attribute = EmptyAttribute) extends ELC
   case class ECase(expr: ELC, alternatives: List[EAlternative], attribute: Attribute = EmptyAttribute) extends ELC
-  case class EJavaScript(jsCode: String, sig: Option[Type], attribute: Attribute = EmptyAttribute) extends ELC
 
   sealed case class EDefinition(lhs: VarFirstClass, sig: Option[Type], rhs: ELC, attribute: Attribute = EmptyAttribute)
 
@@ -93,7 +92,6 @@ trait EnrichedLambdaCalculus {
     case ELetRec(_, _, attr) => attr
     case EChoice(_, attr) => attr
     case ECase(_, _, attr) => attr
-    case EJavaScript(_, _, attr) => attr
   }
 
 
@@ -185,9 +183,9 @@ trait EnrichedLambdaCalculus {
     /*
      * Get the definition of the main function. If the program doesn't contain a
      * main function, i.e., the user is programming a library, we will use a dummy
-     * function consisting just of an empty JavaScript quotation. 
+     * function consisting just of an empty ConstString. 
      */
-    val main = funDefs.getOrElse(Syntax.Var("main"), List(FunctionDef(Nil, JavaScript("", None)))).head.expr
+    val main = funDefs.getOrElse(Syntax.Var("main"), List(FunctionDef(Nil, ConstString("", EmptyAttribute)))).head.expr
 
     /*
      * Translate all function definitions into local definitions for a
@@ -210,7 +208,6 @@ trait EnrichedLambdaCalculus {
     case ConstReal(value, attr) => EReal(value, attr)
     case ConstChar(value, attr) => EChar(value, attr)
     case ConstString(value, attr) => EStr(value, attr)
-    case JavaScript(jsCode, sig, attr) => EJavaScript(jsCode, sig.map(astToType), attr)
     case Case(expr, alts, attr) => ECase(exprToELC(expr), alts.map(altToEAlt), attr)
     case App(fun, expr, attr) => EApp(exprToELC(fun), exprToELC(expr), attr)
 
@@ -313,13 +310,6 @@ trait EnrichedLambdaCalculus {
       case EReal(v, a) => value(v)
       case EChar(c, a) => dquotes(value(c))
       case EStr(s, a) => dquotes(value(s))
-      case EJavaScript(j, s, a) => {
-	val sigDoc = s match {
-	  case None      => empty
-	  case Some(sig) => " :" <+> sig.toString
-	}
-	jsOpenLex <+> j <+> jsCloseLex <> sigDoc
-      }
       case EChoice(cs, a) => "CHOICE"<+>catList(cs.map(showELC),line)
     }
 

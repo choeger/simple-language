@@ -51,8 +51,8 @@ trait SignatureSerializerSpec extends FunSpec with ShouldMatchers with Parboiled
   case class SignatureMatcher(expected : AST) extends Matcher[AST] {
     def apply(delivered : AST) = {
       val result = expected match {
-        case Program(parsedImports, parsedSig, _, _, parsedData, _) => delivered match {
-          case Program(deserializedImports, deserializedSig, _, _, deserializedData, _) =>
+        case Program(parsedImports, parsedSig, _, parsedData, _) => delivered match {
+          case Program(deserializedImports, deserializedSig, _, deserializedData, _) =>
              compareImports(parsedImports, deserializedImports) &&
             compareSigs   (parsedSig    , deserializedSig    ) &&
             compareDatas  (parsedData   , deserializedData   )
@@ -187,7 +187,7 @@ trait SignatureSerializerSpec extends FunSpec with ShouldMatchers with Parboiled
       "PUBLIC DATA Type a b c = Cons1 a b | Cons2 c".parsedSerializedAndDeserialized should equalParsed()
     }
     it("Should not serialize private data constructors") {
-      "DATA Type a = Cons a".parsedSerializedAndDeserialized.deserialized should equal(Program(List(), Map(), Map(), Map(), List(DataDef("Type", List("a"), List()))))
+      "DATA Type a = Cons a".parsedSerializedAndDeserialized.deserialized should equal(Program(List(), Map(), Map(), List(DataDef("Type", List("a"), List()))))
     }
   }
   

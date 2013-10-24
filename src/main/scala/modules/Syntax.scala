@@ -182,12 +182,11 @@ trait Syntax {
       imports: List[Import],
       signatures: Map[VarName, FunctionSig],
       functionDefs: Map[VarName, List[FunctionDef]],
-      functionDefsExtern: Map[VarName, FunctionDefExtern],
       dataDefs: List[DataDef],
       attribute: Attribute = EmptyAttribute)
     extends AST
     
-  val emptyProgram = Program(List(), Map(), Map(), Map(), List())
+  val emptyProgram = Program(List(), Map(), Map(), List())
 
   abstract class Import(val path: String, val attribute: Attribute = EmptyAttribute)
 
@@ -202,12 +201,6 @@ trait Syntax {
       override val attribute: Attribute = EmptyAttribute)
     extends Import(path, attribute)
   
-  /** Special import that allows to directly include js. */ 
-  case class ExternImport(
-      override val path: String,
-      override val attribute: Attribute = EmptyAttribute)
-    extends Import(path, attribute)
-
   sealed abstract class DeclarationModifier
   case object DefaultModifier extends DeclarationModifier
   case object PublicModifier extends DeclarationModifier
@@ -227,11 +220,6 @@ trait Syntax {
       patterns: List[Pattern],
       expr: Expr,
       attribute: Attribute = EmptyAttribute)
-  
-  /**
-   *  Top-level function definitions by mapping to some extern js function.
-   */
-  case class FunctionDefExtern(val externName: String, attribute: Attribute = EmptyAttribute) // BUG bad naming: externName is a JS-block
   
   /**
    * Patterns for top-level function definitions.
@@ -324,7 +312,6 @@ trait Syntax {
   case class ConstChar(value: Char, attribute: Attribute = EmptyAttribute) extends Expr
   case class ConstString(value: String, attribute: Attribute = EmptyAttribute) extends Expr
   case class ConstReal(value: Double, attribute: Attribute = EmptyAttribute) extends Expr
-  case class JavaScript(jsCode: String, signature: Option[ASTType], attribute: Attribute = EmptyAttribute) extends Expr
 
   /**
    * Local definition in a let-binding.
@@ -351,7 +338,6 @@ trait Syntax {
     case ConstReal(_, attr) => attr
     case ConstChar(_, attr) => attr
     case ConstString(_, attr) => attr
-    case JavaScript(_, _, attr) => attr
   }
 
   //TODO: test!
@@ -365,7 +351,6 @@ trait Syntax {
     case ConstChar(_, _) => Set()
     case ConstString(_, _) => Set()
     case ConstReal(_, _) => Set()
-    case JavaScript(_, _, _) => Set()
     case ExVar(x, _) => Set(x)
     case App(l, r, _) => fv(l) ++ fv(r)
     case Let(defs, rhs, _) => fv(rhs) ++ (for (d <- defs; v <- fv(d.rhs)) yield v) -- defs.map(_.lhs).map(Syntax.Var(_))
@@ -400,13 +385,6 @@ trait Syntax {
         doc = doc <@> showModifier(s.modifier) <+> funLex <+> name <+> typeLex <+> showType(s.typ) <> line
 
       for (
-        (name, d) <- m.functionDefsExtern
-      ) {
-        doc = doc <@> defLex <+> externLex <+> name <+> 
-        	    funEqLex <+> dquotes(value(d.externName)) <> line
-      }
-        
-      for (
         (name, ds) <- m.functionDefs;
         d <- ds
       ) {
@@ -418,7 +396,6 @@ trait Syntax {
 
     def showImport(i: Import) : Doc = i match {
       case QualifiedImport(path, name, _) => importLex <+> dquotes(path) <+> asLex <+> name
-      case ExternImport(path, _) => importLex <+> externLex <+> dquotes(path)
     }
 
     def showDataDef(d: DataDef): Doc = d match {
@@ -456,13 +433,6 @@ trait Syntax {
       case ConstChar(c, a) => dquotes(value(c))
       case ConstString(s, a) => dquotes(value(s))
       case ConstReal(x, _) => x.toString
-      case JavaScript(j, s, a) => {
-        val sigDoc = s match {
-          case None => empty
-          case Some(sig) => " :" <+> showType(sig)
-        }
-        jsOpenLex <+> j <+> jsCloseLex <> sigDoc
-      }
     }
 
     def showLefDef(l: LetDef): Doc = text(l.lhs) <+> funEqLex <+> showExpr(l.rhs)

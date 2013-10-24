@@ -64,7 +64,7 @@ trait DTCheckerImpl extends DTChecker
    * @return The initial context containing all data constructors
    */
   def checkDataTypes(in: AST, imports : List[ResolvedImport]): Either[Error, Context] = in match {
-    case Program(_, _, _, _, dataDefs, _) => checkDataTypes(dataDefs, imports)
+    case Program(_, _, _, dataDefs, _) => checkDataTypes(dataDefs, imports)
   }
 
   /**
