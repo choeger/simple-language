@@ -45,7 +45,7 @@ trait ContextAnalysisSpec extends FunSpec with ShouldMatchers {
   def notFail: Matcher[Either[Error, Unit]] = be(Right())
   
   def checking(program: AST): Either[Error, Unit] = {
-    val emptyConfig = Config(null, List(), Path("src/main/resources/lib"), "",  Path(""), Path(""))
+    val emptyConfig = Config(null, List(), Path.fromString("src/main/resources/lib"), "",  Path(""), Path(""))
     
     for (
       imports <- inferDependencies(program, emptyConfig).right;

@@ -33,11 +33,12 @@ trait ModuleResolverImpl extends ModuleResolver {
     val package_dirs = for (url <- urls ; 
 			    op = Path(url.toURI) ; 
 			    p <- op ; 
-			    if (p / standardLibName).isDirectory) 
-		       yield p
-
+			    if (p / "lib" ).isDirectory) 
+		       yield p / "lib"
+    
     package_dirs.headOption.getOrElse(Path())
   }    
+
 
   def standardLibName = "std"
   
