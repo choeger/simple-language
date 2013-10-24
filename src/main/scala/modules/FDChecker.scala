@@ -40,7 +40,7 @@ trait FDChecker {
    * (back to Java-Style *yeah*)
    */
   sealed case class FDCheckResult(sigs : Map[Var, FunctionSig], defs : 
-                                  Map[Var, List[FunctionDef]], ctxt : Context)
+                                  Map[Var, List[FunctionDef]])
 
   /**
     * Check a program's top-level function definitions.

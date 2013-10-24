@@ -28,7 +28,6 @@ trait ModuleContextImpl extends ModuleContext {
         prog.signatures.map(
           {case (funName, sig) => (Syntax.Var(funName, name).asInstanceOf[VarFirstClass] ->
           							astToType(sig.typ).generalize(Map()))})
-    case _ : ResolvedExternImport => Map()
   }
     
   def buildSig(imp : ResolvedImport) : Map[Var, FunctionSig] = imp match {
@@ -44,7 +43,6 @@ trait ModuleContextImpl extends ModuleContext {
         
         (Syntax.Var(ide, name) -> sig)
       })
-    case _ : ResolvedExternImport => Map()
   }
 
 }

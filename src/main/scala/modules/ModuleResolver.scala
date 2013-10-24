@@ -38,12 +38,6 @@ trait ModuleResolver {
       override val ast: QualifiedImport)
     extends ResolvedModuleImport(name, path, file, signature, ast)
     
-  case class ResolvedExternImport(
-      override val path: String,
-      override val file: Path,
-      override val ast: ExternImport)
-    extends ResolvedImport(path, file, ast)
-    
   def inferDependencies(program: AST, config: Config): Either[Error, List[ResolvedImport]]
   def resolveDependencies(program: AST, config: Config): Either[Error, Set[String]]
   

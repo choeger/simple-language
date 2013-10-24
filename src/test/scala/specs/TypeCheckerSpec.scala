@@ -84,19 +84,6 @@ trait TypeCheckerSpec extends FunSpec with ShouldMatchers with SLPrelude {
     it("Should type check String values") {
       EStr("Test") should haveType(BaseType.String)
     }
-
-    it("Should type check JavaScript quote without type ascription") {
-      EJavaScript("", None) should haveType(BaseType.Dom(BaseType.Void))
-    }
-
-    it("Should type check JavaScript quote with type ascription") {
-      EJavaScript("", Some(int)) should haveType(int)
-    }
-
-    it("Should fail on JavaScript quote with invalid type ascription") {
-      val invalidType = TypeConstructor(TConVar("InvalidType"), Nil)
-      checking(EJavaScript("", Some(invalidType))) should fail(AttributedError("Invalid type in type ascription for JavaScript quote: `InvalidType'", EmptyAttribute))
-    }
   }
 
   describe(testedImplementationName() + ": Lambda abstraction") {
@@ -139,9 +126,6 @@ trait TypeCheckerSpec extends FunSpec with ShouldMatchers with SLPrelude {
       (eVar("yield") :@ EInt(5)) should haveType(dom(int))
     }
 
-    it("Should type check application of monadic bind '(yield 5) & {| |}'") {
-      ((eVar("&") :@ (eVar("yield") :@ EInt(5))) :@ EJavaScript("", None)) should haveType(BaseType.Dom(BaseType.Void))
-    }
   }
 
   describe(testedImplementationName() + ": Let-bindings") {

@@ -119,10 +119,10 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
   //ignore whitespace and comments between parsers
   override protected val whiteSpace = """(\s|--.*|(?m)\{-(\*(?!/)|[^*])*-\})+""".r
 
-  private def parseTopLevel: Parser[AST] = rep(makeImport | makeDataDef | makeFunctionDef | makeFunctionSig | makeFunctionDefExtern | makeError) ^^
+  private def parseTopLevel: Parser[AST] = rep(makeImport | makeDataDef | makeFunctionDef | makeFunctionSig | makeError) ^^
     { _.foldLeft(emptyProgram: AST)((z, f) => f(z)) }
 
-  private def makeImport: Parser[AST => AST] = (importDef | importExternDef | importDefError) ^^ { i =>
+  private def makeImport: Parser[AST => AST] = (importDef |  importDefError) ^^ { i =>
     (a: AST) =>
       a match {
         case m: Program => m.copy(imports = i :: m.imports)
@@ -150,13 +150,6 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
       }
   }
 
-  def makeFunctionDefExtern: Parser[AST => AST] = (functionDefExtern | funDefExternError) ^^ { x =>
-    (a: AST) =>
-      a match {
-        case m: Program => m.copy(functionDefsExtern = m.functionDefsExtern + x)
-      }
-  }
-
   def makeError: Parser[AST => AST] = anyToken ^^! {
       case (a, found) => "unexpected token: " + quote(found) + "; expected top level definition"
   }
@@ -166,11 +159,6 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
   private def importDef: Parser[Import] = 
     importLex ~> string ~ asLex ~ checkedModuleIde ^^@ {
       case (a, name ~ _ ~ mod) => QualifiedImport(name.value, mod, a)
-    }
-
-  private def importExternDef: Parser[Import] =
-    importLex ~ externLex ~> string ^^@ {
-      case (a, name) => ExternImport(name.value, a)
     }
 
   private def functionDef: Parser[(VarName, FunctionDef)] =
@@ -183,17 +171,8 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
       case (a, p1 ~ op ~ p2 ~ _ ~ e) => (op, FunctionDef(p1 ++ p2, e, a))
     }
 
-  private def functionDefExtern: Parser[(VarName, FunctionDefExtern)] =
-    defLex ~ externLex ~> (varRegex|opRegex) ~ expect(funEqLex) ~ jsRegex ^^@ {
-      case (a, v ~ _ ~ js) => (v, FunctionDefExtern(js, a))
-    }
-
   private def dataDef: Parser[DataDef] = (
-      publicLex ~> dataLex ~> externLex ~> checkedTypeIde ~ rep(varRegex) ^^@
-      { case (a, t ~ tvs) => DataDef(t, tvs, List(), PublicModifier, a) }
-    | dataLex ~> externLex ~> checkedTypeIde ~ rep(varRegex) ^^@
-      { case (a, t ~ tvs) => DataDef(t, tvs, List(), DefaultModifier, a) }
-    | publicLex ~> dataLex ~> checkedTypeIde ~ rep(varRegex) ~ expect(funEqLex) ~ rep1sep(conDef, dataSepLex) ^^@
+     publicLex ~> dataLex ~> checkedTypeIde ~ rep(varRegex) ~ expect(funEqLex) ~ rep1sep(conDef, dataSepLex) ^^@
       { case (a, t ~ tvs ~ _ ~ cs) => DataDef(t, tvs, cs, PublicModifier, a) }
     | dataLex ~> checkedTypeIde ~ rep(varRegex) ~ expect(funEqLex) ~ rep1sep(conDef, dataSepLex) ^^@
       { case (a, t ~ tvs ~ _ ~ cs) => DataDef(t, tvs, cs, DefaultModifier, a) })
@@ -297,8 +276,7 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
   private def opRegex: Parser[String] = not(eqRegex) ~> """[!§%&/=\?\+\*#\-\<\>|]+""".r ^^ { case s: String => s }
   private def eqRegex: Parser[String] = """=(?![!§%&/=\?\+\*#\-:\<\>|])""".r ^^ { case s: String => s }
   private def keyword: Parser[String] = keywords.mkString("", "|", "").r
-  private def jsRegex = jsOpenLex ~> """(?:(?!\|\}).|\n|\r)*""".r <~ jsCloseLex ^^ { case s: String => s }
-  private def anyToken = keyword | consRegex | varRegex | eqRegex | jsOpenLex | jsCloseLex | """^[ \t\n]""".r
+  private def anyToken = keyword | consRegex | varRegex | eqRegex | """^[ \t\n]""".r
 
   //Qualified things
   private def unqualBinop: Parser[ExVar] = 
@@ -336,7 +314,7 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
     bracket | bracketError(bracket) 
 
   private def bracketError(expected: String): Parser[String] = 
-    (")" | "]" | "}" | jsCloseLex | funLex | defLex | importLex | dataLex | publicLex | externLex | anyToken) ^^! {
+    (")" | "]" | "}" | funLex | defLex | importLex | dataLex | publicLex |  anyToken) ^^! {
       case (a, found) => "unbalanced parentheses: " + quote(expected) + " expected but " + quote(found) + " found."
     }
 
@@ -383,13 +361,8 @@ trait CombinatorParser extends RegexParsers with Parsers with Parser with Syntax
     }
 
   private def funDefError: Parser[(VarName, FunctionDef)] =
-    defLex ~> not(externLex) ~> anyToken ^^! {
+    defLex ~> anyToken ^^! {
       case (a, found) => "malformed function definition: " + quote(found) + " unexpected."
-    }
-
-  private def funDefExternError: Parser[(VarName, FunctionDefExtern)] =
-    defLex ~> externLex ~> anyToken ^^! {
-      case (a, found) => "malformed extern function definition: " + quote(found) + " unexpected."
     }
 
   private def badStmt: Parser[Expr] = "." ~> anyToken ^^! {

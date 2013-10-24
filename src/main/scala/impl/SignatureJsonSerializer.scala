@@ -134,7 +134,7 @@ trait SignatureJsonSerializer extends SignatureSerializer with Syntax with Error
 
   // actual (de)serialization implementation starts here
   
-  private def ast2Json(ast : AST) : JsonExportAst = ast match { case Program(imports, sigs, _, _, datas, _) =>
+  private def ast2Json(ast : AST) : JsonExportAst = ast match { case Program(imports, sigs,  _, datas, _) =>
     val exportedSigs = sigs.filter{
         case (_, FunctionSig(_,modi,_)) => PublicModifier == modi}
     val root : Map[String, Any] = Map(
@@ -151,17 +151,13 @@ trait SignatureJsonSerializer extends SignatureSerializer with Syntax with Error
     val jsonSigs    = jsonAst.get("signatures").get.asInstanceOf[JsonImportFunctionSigMap]
     val jsonDatas   = jsonAst.get("dataDefs"  ).get.asInstanceOf[JsonImportDataDefList   ]
     
-    Program(json2Imports(jsonImports), json2Sigs(jsonSigs, location), Map(), Map(), json2Datas(jsonDatas, location))
+    Program(json2Imports(jsonImports), json2Sigs(jsonSigs, location), Map(), json2Datas(jsonDatas, location))
   }
   
   private def import2Json(_import : Import) : JsonExportImport = _import match {
     case QualifiedImport(path, name, _) =>
     JSONObject(Map[String, Any](
         ("name" -> moduleVar2Json(name)),
-        ("path" ->      path2Json(path))))
-    case ExternImport(path, _) =>
-      JSONObject(Map[String, Any](
-        ("name" -> moduleVar2Json("_EXTERN_")),
         ("path" ->      path2Json(path))))
   }
   

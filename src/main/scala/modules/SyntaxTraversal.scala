@@ -70,10 +70,10 @@ trait SyntaxTraversal {
     */
   def map[A: TypeTag](f: Id ~> Id, x: A): A = {
     val y = x match {
-      case Program(imports, signatures, functionDefs, functionDefsExtern, dataDefs, a) => {
+      case Program(imports, signatures, functionDefs, dataDefs, a) => {
         val sigs: Map[VarName, FunctionSig] = signatures.map { case (a, b) => map(f, (map(f, a), map(f, b))) }
         val fund: Map[VarName, List[FunctionDef]] = functionDefs.map { case (a, b) => map(f, (map(f, a), map(f, b.map(map(f, _))))) }
-        Program(map(f, imports), map(f, sigs), map(f, fund), map(f, functionDefsExtern), map(f, dataDefs.map(map(f, _))), map(f, a))
+        Program(map(f, imports), map(f, sigs), map(f, fund), map(f, dataDefs.map(map(f, _))), map(f, a))
       }
 
       case FunctionSig(typ, modi, a) => FunctionSig(map(f, typ), map(f, modi), map(f, a))
@@ -113,8 +113,6 @@ trait SyntaxTraversal {
       case ConstChar(c, a) => ConstChar(map(f, c), map(f, a))
 
       case ConstString(s, a) => ConstString(map(f, s), map(f, a))
-
-      case JavaScript(j, s, a) => JavaScript(map(f, j), map(f, s), map(f, a))
 
       case Alternative(pattern, expr, a) => Alternative(map(f, pattern), map(f, expr), map(f, a))
 

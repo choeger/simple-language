@@ -74,12 +74,11 @@ trait Lexic {
   val letLex = "LET"
   val inLex = "IN"
   val importLex = "IMPORT"
-  val externLex = "EXTERN"
   val publicLex = "PUBLIC"
   val asLex = "AS"
 
   val keywords = List(defLex, dataLex, ifLex, thenLex, elseLex,
-    caseLex, ofLex, letLex, inLex, funLex, importLex, externLex, publicLex, asLex)
+    caseLex, ofLex, letLex, inLex, funLex, importLex, publicLex, asLex)
 
   val dotLex = "."
   val funEqLex = "="
@@ -87,8 +86,6 @@ trait Lexic {
   val lambdaLex = "\\"
   val arrowLex = "->"
   val typeLex = ":"
-  val jsOpenLex = "{|"
-  val jsCloseLex = "|}"
 
   /* Symbols for comments */
   val commentStart = "{-"

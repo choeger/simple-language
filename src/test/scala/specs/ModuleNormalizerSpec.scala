@@ -176,7 +176,6 @@ trait ModuleNormalizerSpec extends FunSpec with ShouldMatchers {
           List(QualifiedImport("a", "#1")),
           Map(),
           Map(),
-          Map(),
           List(
             DataDef("DataB", List(), List(
               ConstructorDef("ConsB", 

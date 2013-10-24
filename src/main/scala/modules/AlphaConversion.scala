@@ -98,6 +98,5 @@ trait AlphaConversion {
     case c@ConstReal(_, _) => c
     case c@ConstChar(_, _) => c
     case c@ConstString(_, _) => c
-    case c@JavaScript(_, _, _) => c
   }
 }
