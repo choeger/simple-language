@@ -41,15 +41,15 @@ trait PatternMatchingSpec extends FunSpec with Inside with ShouldMatchers {
   
   private def nil = PatternExpr(Syntax.ConVar("Nil"), Nil)
 
-  def arity(c : ConVar) = c match {
-    case Syntax.ConVar("Cons", _) => 2
-    case _ => 0
-  }
+  val arity = Map(
+    Syntax.ConVar("Cons") -> 2,
+    Syntax.ConVar("Nil") -> 0
+  )
 
-  def constructors(c : ConVar) = c match {
-    case Syntax.ConVar("Cons", _) | Syntax.ConVar("Nil", _) => Set(Syntax.ConVar("Cons"), Syntax.ConVar("Nil"))
-    case _ => Set[ConVar]()
-  }
+  val constructors = Map(
+    Syntax.ConVar("Cons") -> Set(Syntax.ConVar("Cons"), Syntax.ConVar("Nil")),
+    Syntax.ConVar("Nil") -> Set(Syntax.ConVar("Cons"), Syntax.ConVar("Nil"))
+  )
 
   val ctxt = PatternMatchingCtxt(arity, constructors, 1)
 
