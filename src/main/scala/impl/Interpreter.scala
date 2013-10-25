@@ -95,14 +95,14 @@ object Interpreter
       
     private val baseClass = ClassName("Interpreter"::"sl2"::Nil, DateTime.now().toString(), Nil)
     
-    private var current = Program(Nil, Map(), Map(), Map(), Nil)
+    private var current = Program(Nil, Map(), Map(), Nil)
 
     def coderEnv = {
       IMEncodingEnv(baseClass, Set(), Map(), currentContext)
     }
 
-    private var config = Config(Path(".").asFile, Nil, Path(".").asFile, "", Path(".").asFile, 
-                                Path.createTempDirectory(deleteOnExit=false).asFile)
+    private var config = Config(Path("."), Nil, Path("."), "", Path("."), 
+                                Path.createTempDirectory(deleteOnExit=false))
 
     def banner = "Simulation Language Interpreter"
     
