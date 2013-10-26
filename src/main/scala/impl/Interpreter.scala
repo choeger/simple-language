@@ -67,7 +67,8 @@ object Interpreter
     with ModuleNormalizerImpl
     with ModuleContextImpl
     with ModuleLinearization
-    with REPL {
+    with REPL
+    with ASMBasedJVMEncoder {
     
     sealed abstract class Mode
     case object ExprMode extends Mode
@@ -93,7 +94,7 @@ object Interpreter
 
     private var mode:Mode = ExprMode
       
-    private val baseClass = ClassName("Interpreter"::"sl2"::Nil, DateTime.now().toString(), Nil)
+    private val baseClass = ClassName("Interpreter"::"sl2"::Nil, "Session", Nil)
     
     private var current = Program(Nil, Map(), Map(), Nil)
 
@@ -139,12 +140,16 @@ object Interpreter
         case SwitchExprMode() => mode = ExprMode
         case SomeCommand(x) => emitter.emitln("No comprendo: '" + x + "'")
         case _ => mode match {
-          case ExprMode => {
-            val res = for (e <- parseExpr(line).right)
-                      yield { emitter.emitln("Parsed:") ; emitter.emitln(ASTPrettyPrinter.pretty(e)) }
-                      
-            res match {
-              case Right(_) => {}
+          case ExprMode => {                      
+            parseExpr(line) match {
+              case Right(e) => {
+                emitter.emitln("Parsed:")
+                emitter.emitln(ASTPrettyPrinter.pretty(e))
+                val im = encode(IMEncodingEnv(baseClass, Set(), Map(), currentContext), e)
+                emitter.emitln("Compiling in " + (baseClass $ "expr"))
+                val bytes = encode(JVMEncodingCtxt("eval", baseClass $ "expr", GeneralObject), im._1)
+                decodeToStdOut(bytes)
+              }
               case Left(err) => emitter.emitln(err)
             }
           }

@@ -40,10 +40,14 @@ trait IMSyntax {
   sealed case class ClassField(name : String, tipe : IMType)
 
   sealed case class ClassName(pkg : List[String], main : String, internal : List[String]) {
-    override def toString() = (internal.reverse::((main::pkg).mkString("."))::Nil).mkString("$")
-    
+    override def toString() = 
+      (((main::pkg).reverse.mkString(".")::Nil) ++ internal.reverse).mkString("$")
+
     def $(name : String) = ClassName(pkg, main, name::internal)
 
+    def jvmString = {
+      (((main::pkg).reverse.mkString("/")::Nil) ++ internal.reverse).mkString("$")
+    }
   }
 
   sealed abstract class IMCode

@@ -22,7 +22,11 @@ libraryDependencies ++= Seq(
 	"org.scalaz" %% "scalaz-core" % "7.0.4",
 	"joda-time" % "joda-time" % "2.3",
 	"org.joda" % "joda-convert" % "1.2",
-	"org.ow2.asm" % "asm" % "4.2"
+	"org.ow2.asm" % "asm" % "4.2",
+	"org.ow2.asm" % "asm-tree" % "4.2",
+	"org.ow2.asm" % "asm-commons" % "4.2",
+	"org.ow2.asm" % "asm-analysis" % "4.2",
+	"org.ow2.asm" % "asm-util" % "4.2"
 )
 
 mainClass := Some("de.tuberlin.uebb.sl2.impl.FrontEndImpl")
