@@ -26,27 +26,15 @@
  *
  */
 
-package de.tuberlin.uebb.sl2.modules
+package de.tuberlin.uebb.sl2.runtime;
 
-trait JVMEncoder {
-  this : IMSyntax =>
-
-  sealed abstract class SuperClassKind
-  case object ClosureClass extends SuperClassKind
-  case object GeneralObject extends SuperClassKind
-
-  sealed case class JVMClass(name : ClassName, code : Array[Byte])
-  
-  /**
-   * maybe later use
-   */
-  sealed case class JVMEncodingCtxt()
-
-  def jvmSuperClass(kind : SuperClassKind) = kind match {
-    case ClosureClass => "de/tuberlin/uebb/sl2/runtime/Closure"
-    case GeneralObject => "java/lang/Object"
-  }
-
-  def encode(ctxt : JVMEncodingCtxt, program : IMModuleClass) : List[JVMClass]
-
+/**
+ * The runtime representation of a closure
+ */
+public interface Closure {
+    
+    /**
+     * Apply this closure to the given argument
+     */    
+    Object eval(Object arg);    
 }

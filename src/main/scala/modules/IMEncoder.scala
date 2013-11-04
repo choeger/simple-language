@@ -36,6 +36,6 @@ trait IMEncoder {
                                   modules : Map[String, ClassName],
                                   data : PatternMatchingCtxt)
 
-  def encode(env: IMEncodingEnv, s : Expr) : (IMCode, List[IMClass])
+  def encode(env : IMEncodingEnv, prog : Program) : IMModuleClass
 
 }

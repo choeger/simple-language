@@ -28,25 +28,13 @@
 
 package de.tuberlin.uebb.sl2.modules
 
-trait JVMEncoder {
-  this : IMSyntax =>
-
-  sealed abstract class SuperClassKind
-  case object ClosureClass extends SuperClassKind
-  case object GeneralObject extends SuperClassKind
-
-  sealed case class JVMClass(name : ClassName, code : Array[Byte])
+trait ByteCodeInterpreter {
   
+  this: JVMEncoder with Syntax with IMSyntax with Errors =>
+
   /**
-   * maybe later use
+   * The Bytecode interpreter is capable of evaluating
+   * compiled byte code into the string representation of the resulting SL-value
    */
-  sealed case class JVMEncodingCtxt()
-
-  def jvmSuperClass(kind : SuperClassKind) = kind match {
-    case ClosureClass => "de/tuberlin/uebb/sl2/runtime/Closure"
-    case GeneralObject => "java/lang/Object"
-  }
-
-  def encode(ctxt : JVMEncodingCtxt, program : IMModuleClass) : List[JVMClass]
-
+  def eval(klazz : ClassName, classes : List[JVMClass])  : Either[Error, String]
 }

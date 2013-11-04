@@ -55,6 +55,10 @@ trait Errors {
     override def message = what
   }
 
+  case class InternalExecutionError(cause : Throwable) extends Error {
+    override def message = cause.getMessage
+  }
+
   /* If a phase depends on another phase that produced an error, forward that error. */
   case class CouldNotRun(what : String, why : Error) extends Error {
     override def message = "Could not run %s: %s".format(what, why.message)
@@ -145,6 +149,7 @@ trait Errors {
     case AttributedError     (what, where)        => where.toString + ": " + what + "\n"
     case NotImplementedError (what, name, where)  => where.toString + ": " + quote(name) + " declared but not implemented. " + what + "\n"
     case ErrorList           (errors)             => errors.map(_.toString).mkString("")
+    case InternalExecutionError(cause)            => "Internal Error " + quote(cause.getMessage)
     case _ => "Unknown error\n"
   }
 

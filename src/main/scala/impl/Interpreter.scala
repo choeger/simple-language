@@ -68,8 +68,10 @@ object Interpreter
     with ModuleContextImpl
     with ModuleLinearization
     with REPL
-    with ASMBasedJVMEncoder {
-    
+    with ASMBasedJVMEncoder
+    with JVMClassInterpreter
+{   
+
     sealed abstract class Mode
     case object ExprMode extends Mode
     case object ModMode extends Mode
@@ -98,27 +100,18 @@ object Interpreter
     
     private var current = Program(Nil, Map(), Map(), Nil)
 
-    def coderEnv = {
-      IMEncodingEnv(baseClass, Set(), Map(), currentContext)
-    }
-
     private var config = Config(Path("."), Nil, Path("."), "", Path("."), 
                                 Path.createTempDirectory(deleteOnExit=false))
 
     def banner = "Simulation Language Interpreter"
     
-    def currentContext = {    
-      val checkResults = for (
+    def currentContext(p : Program) = {    
+      for (
         // check and load dependencies
-        dependencies <- inferDependencies(current, config).right;
+        dependencies <- inferDependencies(p, config).right;
         // type check the program
         _ <- checkProgram(current, normalizeModules(dependencies)).right            
-      ) yield context(current, dependencies)
-      
-      checkResults match {
-        case Left(_) => PatternMatchingCtxt()
-        case Right(ctxt) => ctxt
-      }
+      ) yield context(current, dependencies)      
     }
 
     def context(p : Program, i : List[ResolvedImport]) : PatternMatchingCtxt = {
@@ -134,21 +127,38 @@ object Interpreter
       lctxt
     }
 
+    var exprCounter : Int = 0
+    
+    def className : ClassName = {
+      baseClass $ ("Expr_" + exprCounter)
+    }
+
+    def updateProg(line : String) = {
+      for (e <- parseExpr(line).right) yield 
+        current.copy(functionDefs = current.functionDefs + ("eval" -> (FunctionDef(Nil, e)::Nil)))
+    }
+
     def processline (line : String) = {
       line match {
         case SwitchModuleMode() => mode = ModMode
         case SwitchExprMode() => mode = ExprMode
         case SomeCommand(x) => emitter.emitln("No comprendo: '" + x + "'")
         case _ => mode match {
-          case ExprMode => {                      
-            parseExpr(line) match {
-              case Right(e) => {
-                emitter.emitln("Parsed:")
-                emitter.emitln(ASTPrettyPrinter.pretty(e))
-                val im = encode(IMEncodingEnv(baseClass, Set(), Map(), currentContext), e)
-                emitter.emitln("Compiling in " + (baseClass $ "expr"))
-                val bytes = encode(JVMEncodingCtxt("eval", baseClass $ "expr", GeneralObject), im._1)
+          case ExprMode => {
+            val res : Either[Error, (Program, PatternMatchingCtxt)] = 
+              for(prog <- updateProg(line).right ; 
+                  ctxt <- currentContext(prog).right) yield (prog, ctxt)
+
+            res match {
+              case Right(r) => {
+                val (prog, ctxt) = r
+                val main = encode(IMEncodingEnv(className, Set(), Map(), ctxt), prog)
+                emitter.emitln("Compiling in " + className)
+                val bytes = encode(JVMEncodingCtxt(), main)
                 decodeToStdOut(bytes)
+
+                emitter.emitln(eval(className, bytes))
+                exprCounter = exprCounter + 1
               }
               case Left(err) => emitter.emitln(err)
             }

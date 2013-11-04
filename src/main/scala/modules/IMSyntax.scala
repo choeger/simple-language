@@ -84,9 +84,11 @@ trait IMSyntax {
   
   sealed abstract class IMClass(val name : ClassName)
   case class IMDataClass(override val name : ClassName, fields : List[ClassField]) extends IMClass(name)
-  case class IMClosureClass(override val name : ClassName, 
-                            closedFields : List[ClassField], 
-                            args : Int, 
-                            rhs : IMCode) extends IMClass(name)
+  case class IMClosureClass(override val name : ClassName, rhs : IMCode) extends IMClass(name)
+  case class IMModuleClass(override val name : ClassName, elements : List[IMModuleElement]) extends IMClass(name)
+
+  sealed abstract class IMModuleElement
+  case class IMSubClass(klazz : IMClass) extends IMModuleElement
+  case class IMConstant(name : String, value : IMCode) extends IMModuleElement
 
 }

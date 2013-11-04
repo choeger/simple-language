@@ -42,71 +42,124 @@ import org.objectweb.asm.util.{TraceClassVisitor, CheckClassAdapter}
 
 trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
 
-  sealed case class ASMEncodingState(classes : List[ClassWriter] = Nil, freshName : Int = 0)
+  sealed case class ASMEncodingState(classes : List[ASMClass] = Nil, freshName : Int = 0)
 
   type ASMEncoder[A] = State[ASMEncodingState, A]
 
+  sealed case class ASMClass(name : ClassName, writer : ClassWriter) {
+    def toByteCode : JVMClass = {
+      writer.visitEnd()
+      JVMClass(name, writer.toByteArray)
+    }
+  }
+
+  def encode(ctxt : JVMEncodingCtxt, module : IMModuleClass) : List[JVMClass] = {  
+    val run = for (
+      klazz <- newClass(module.name) ;
+      cw = klazz.writer ;
+      _ = cw.visit(V1_5, ACC_PUBLIC + ACC_SUPER, module.name.jvmString, null, jvmSuperClass(GeneralObject), null) ;
+      elements <- (module.elements map encodeElement(ctxt, klazz)).sequence      
+    ) yield elements          
+    
+    val (state, elements) = run(ASMEncodingState())
+    state.classes map (_.toByteCode)
+  }
+
+  def newClass(name : ClassName) : ASMEncoder[ASMClass] = {
+    for(
+      state <- get[ASMEncodingState] ;
+      cw = new ClassWriter(ClassWriter.COMPUTE_MAXS) ;
+      klazz = ASMClass(name, cw) ;
+      _ <- put(state.copy(classes = klazz::state.classes))
+    ) yield (klazz)
+  }
+
+  def newMethod(cv : ClassVisitor, name : String) : ASMEncoder[MethodVisitor] = {
+    val mv = cv.visitMethod(ACC_PUBLIC + ACC_STATIC, name, "()Ljava/lang/Object;", null, null)
+    mv.visitCode()
+    State({s : ASMEncodingState => (s, mv)})
+  }
+
   /**
-    *  Encode a given IM expression into JVM Bytecode using ASM
-    *  This method returns a whole class
+   * Expression compilation into method body
+   */
+  private def bc(mv : MethodVisitor, e : IMCode) : Unit = e match {
+    case IMConstInt(v) => {
+      mv.visitTypeInsn(NEW, "java/lang/Integer")
+      mv.visitInsn(DUP) 
+      mv.visitLdcInsn(v)         
+      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Integer", "<init>", "(I)V")
+    }
+    case IMConstChar(v) => {
+      mv.visitTypeInsn(NEW, "java/lang/Char")
+      mv.visitInsn(DUP) 
+      mv.visitLdcInsn(v)         
+      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Char", "<init>", "(C)V")        
+    }
+    case IMConstString(v) => {
+      mv.visitTypeInsn(NEW, "java/lang/String")
+      mv.visitInsn(DUP) 
+      mv.visitLdcInsn(v)         
+      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/String", "<init>", "(S)V")
+    }
+    case IMConstReal(v) => {
+      mv.visitTypeInsn(NEW, "java/lang/Double")
+      mv.visitInsn(DUP) 
+      mv.visitLdcInsn(v)         
+      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Double", "<init>", "(D)V")
+    }
+    case IMMatchFail(c) => {
+      mv.visitLdcInsn(c) ; 
+      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V") 
+      mv.visitInsn(ATHROW);
+    }
+  }
+
+  /**
+    *  Encode a given IM class element into JVM Bytecode using ASM
     */
-  def encode(ctxt : JVMEncodingCtxt, expr : IMCode) : Array[Byte] = {
+  def encodeElement(ctxt : JVMEncodingCtxt, current : ASMClass)(element : IMModuleElement) : ASMEncoder[IMModuleElement] = {
 
-    def newClass : ASMEncoder[ClassWriter] = {
+    def encClosure(name : ClassName, e : IMCode) = {
       for(
-        state <- get[ASMEncodingState] ;
-        cw = new ClassWriter(ClassWriter.COMPUTE_MAXS) ;
-        _ <- put(state.copy(classes = cw::state.classes))
-      ) yield (cw)
-    }
-
-    def newStaticMethod(cv : ClassVisitor, name : String) : ASMEncoder[MethodVisitor] = {
-      val mv = cv.visitMethod(ACC_PUBLIC + ACC_STATIC, name, "()Ljava/lang/Object;", null, null)
-      mv.visitCode()
-      State({s : ASMEncodingState => (s, mv)})
-    }
-
-    def enc(e : IMCode) : ASMEncoder[Array[Byte]] = {
-      for(
-        cw <- newClass ;
+        klazz <- newClass(name) ; 
+        cw = klazz.writer ;
         cv = new CheckClassAdapter (cw, false) ;
-        _ = cv.visit(V1_5, ACC_PUBLIC + ACC_SUPER, ctxt.fullName, null, ctxt.superType, null) ;
-        mv <- newStaticMethod(cv, "eval") ;
+        _ = cv.visit(V1_5, ACC_PUBLIC + ACC_SUPER, name.jvmString, null, jvmSuperClass(ClosureClass), null) ;
+        mv <- newMethod(cv, "apply") ;
         _ = mv.visitCode();
         _ = bc(mv, e) ;
         //_ 
-        _ = mv.visitInsn(ACONST_NULL);
         _ = mv.visitInsn(ARETURN);
         _ = mv.visitMaxs(0, 0);
         _ = mv.visitEnd();
-        _ = cw.visitEnd();
-        bytes = cw.toByteArray()
-      ) yield bytes
+        _ = cw.visitEnd()
+      ) yield element
+    }
+    
+    def encConstant(name : String, e : IMCode) = {
+      for (
+        mv <- newMethod(current.writer, name) ;
+        _ = mv.visitCode();
+        _ = bc(mv, e) ;
+        //_ 
+        _ = mv.visitInsn(ARETURN);
+        _ = mv.visitMaxs(0, 0);
+        _ = mv.visitEnd()
+      ) yield element
     }
 
-    /**
-      * Expression compilation into method body
-      */
-    def bc(mv : MethodVisitor, e : IMCode) : Unit = e match {
-      case IMConstInt(v) => mv.visitLdcInsn(v)
-      case IMConstChar(v) => mv.visitLdcInsn(v)
-      case IMConstString(v) => mv.visitLdcInsn(v)
-      case IMConstReal(v) => mv.visitLdcInsn(v)
-      case IMMatchFail(c) => {
-        mv.visitLdcInsn(c) ; 
-        mv.visitMethodInsn(INVOKESPECIAL, "java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V") ;
-        mv.visitInsn(ATHROW);
-      }
-      case _ =>
+    element match {
+      case IMSubClass(IMClosureClass(name, rhs)) => encClosure(name, rhs) 
+      case IMConstant(name, value) => encConstant(name, value)
     }
-
-    val (state, bytes) = enc(expr)(ASMEncodingState())
-    bytes
   }
 
-  def decodeToStdOut(bytes : Array[Byte]) = {
-    val cr = new ClassReader(bytes)
-    cr.accept(new TraceClassVisitor(new PrintWriter(System.out)), 0);
+  def decodeToStdOut(classes : List[JVMClass]) = {
+    for (klazz <- classes) {
+      val cr = new ClassReader(klazz.code)
+      cr.accept(new TraceClassVisitor(new PrintWriter(System.out)), 0);
+    }
   }
 
 }
