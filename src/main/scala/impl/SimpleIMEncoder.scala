@@ -37,7 +37,7 @@ import Scalaz._
 
 import scala.language.implicitConversions
 
-trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPatternMatching {
+trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPatternMatching with Configs {
 
   def instanceField = ClassField("instance", TObject)
   

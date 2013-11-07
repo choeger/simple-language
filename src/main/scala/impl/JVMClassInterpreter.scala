@@ -44,7 +44,6 @@ trait JVMClassInterpreter extends ByteCodeInterpreter with Syntax with Errors wi
     def define(classes : List[JVMClass]) = {
       for (klazz <- classes) {
         val kl = super.defineClass(klazz.name.toString, klazz.code, 0, klazz.code.size);
-        println("Defining : " + klazz.name.toString + " -> " + kl)
         classCache.put(klazz.name.toString, kl)
       }
     }
@@ -55,6 +54,10 @@ trait JVMClassInterpreter extends ByteCodeInterpreter with Syntax with Errors wi
       else
         super.findClass(klazz.toString)
     }
+
+    def clearCache() {
+      classCache.clear
+    }
   }
 
   def decode(o : Object) : Either[Error, String] = o match {
@@ -63,18 +66,23 @@ trait JVMClassInterpreter extends ByteCodeInterpreter with Syntax with Errors wi
     case _ => Left(GenericError("Decoding of '%s' failed".format(o)))
   }
 
+  def eval(klazz : ClassName, classes : List[JVMClass]) : Either[Error, String] = {
+    for (o <- evalToObject(klazz, classes).right ; dec <- decode(o).right)
+      yield dec
+  }
+
   /**
    * Load bytecode as JVM class and execute its "eval" method.
    */
-  def eval(klazz : ClassName, classes : List[JVMClass]) : Either[Error, String] = {
+  def evalToObject(klazz : ClassName, classes : List[JVMClass]) : Either[Error, Object] = {
     try {
+      dynamicClassLoader.clearCache
       dynamicClassLoader.define(classes)
       val created = dynamicClassLoader.load(klazz)
       val method = created.getMethod("eval")
-      decode(method.invoke(null))
+      Right(method.invoke(null))
     } catch {
       case t:Throwable => {
-        t.printStackTrace
         Left(GenericError(t.getMessage))
       }
     }

@@ -28,13 +28,14 @@
 
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.FunSpec
 import de.tuberlin.uebb.sl2.modules._
 import de.tuberlin.uebb.sl2.specs.SLPrelude
 import de.tuberlin.uebb.sl2.modules.Syntax._
 
-trait TypeCheckerSpec extends FunSpec with ShouldMatchers with SLPrelude {
+trait TypeCheckerSpec extends FunSpecLike with Matchers with SLPrelude {
 
   this: TypeChecker with Syntax with Context with Type with NameSupply with EnrichedLambdaCalculus with ELCExpressions with Errors =>
 

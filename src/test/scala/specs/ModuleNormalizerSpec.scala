@@ -1,10 +1,11 @@
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.FunSpec
 import de.tuberlin.uebb.sl2.modules._
 
-trait ModuleNormalizerSpec extends FunSpec with ShouldMatchers {
+trait ModuleNormalizerSpec extends FunSpecLike with Matchers {
   this : ModuleNormalizer
   with Syntax
   with SyntaxTraversal

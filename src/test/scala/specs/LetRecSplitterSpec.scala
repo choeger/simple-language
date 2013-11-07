@@ -28,11 +28,12 @@
 
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.FunSpec
 import de.tuberlin.uebb.sl2.modules._
 
-trait LetRecSplitterSpec extends FunSpec with ShouldMatchers {
+trait LetRecSplitterSpec extends FunSpecLike with Matchers {
 
   this: LetRecSplitter with Lexic with EnrichedLambdaCalculus with ELCExpressions with Errors =>
 

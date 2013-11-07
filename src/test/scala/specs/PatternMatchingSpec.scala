@@ -28,12 +28,13 @@
 
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.{ FunSpec, Inside }
 
 import de.tuberlin.uebb.sl2.modules._
 
-trait PatternMatchingSpec extends FunSpec with Inside with ShouldMatchers {
+trait PatternMatchingSpec extends FunSpecLike with Inside with Matchers {
 
   this : Syntax with PatternMatching => 
 

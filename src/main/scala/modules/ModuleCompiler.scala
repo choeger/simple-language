@@ -28,21 +28,18 @@
 
 package de.tuberlin.uebb.sl2.modules
 
-trait ByteCodeInterpreter {
-  
-  this: JVMEncoder with Syntax with IMSyntax with Errors =>
+/**
+ * Convenience module, allows for direct compilation of given source as a module
+ */
+trait ModuleCompiler extends Syntax with JVMEncoder with IMSyntax with Errors {
 
   /**
-   * The Bytecode interpreter is capable of evaluating
-   * compiled byte code into the string representation of the resulting SL-value
+   * Compiles the given source String into a module and a Java class.
+   * 
+   * @param className The name of the resulting Java class
+   *
+   * @param p The SL-module source code
    */
-  def eval(klazz : ClassName, classes : List[JVMClass])  : Either[Error, String]
+  def compileModule(className : ClassName, p : String) : Either[Error, List[JVMClass]]
 
-  /**
-   * The Bytecode interpreter is capable of evaluating
-   * compiled byte code into the jvm representation of the resulting SL-value
-   */
-  def evalToObject(klazz : ClassName, classes : List[JVMClass])  : Either[Error, Any]
-
-  
 }

@@ -28,12 +28,13 @@
 
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.{ FunSpec, Inside }
 import scala.language.implicitConversions
 import de.tuberlin.uebb.sl2.modules._
 
-trait ParserSpec extends FunSpec with Inside with ShouldMatchers {
+trait ParserSpec extends FunSpecLike with Inside with Matchers {
   this: Parser with Syntax with Lexic with Errors =>
 
   case class ParseCommand[T](s: String, cmd: String => Either[Error, T])

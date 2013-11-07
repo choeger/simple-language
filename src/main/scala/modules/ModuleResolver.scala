@@ -1,3 +1,4 @@
+
 package de.tuberlin.uebb.sl2.modules
 
 import scalax.file.Path;
@@ -50,4 +51,5 @@ trait ModuleResolver {
   def standardLibPath: Path
 
   def getLibResource(path: String) : Path = standardLibPath / path
+
 }

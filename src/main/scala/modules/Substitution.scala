@@ -48,7 +48,7 @@ trait Substitution {
   /**
     * The empty substitution.
     */
-  val empty: Substitution = Map.empty
+  def emptySubst: Substitution = Map.empty
 
 
   /**

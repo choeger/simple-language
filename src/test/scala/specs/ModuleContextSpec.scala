@@ -1,10 +1,11 @@
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.FunSpec
 import de.tuberlin.uebb.sl2.modules._
 
-trait ModuleContextSpec extends FunSpec with ShouldMatchers {
+trait ModuleContextSpec extends FunSpecLike with Matchers {
   this : ModuleContext
   with ModuleResolver
   with ModuleNormalizer

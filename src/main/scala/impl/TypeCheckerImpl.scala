@@ -64,18 +64,18 @@ trait TypeCheckerImpl extends TypeChecker with Lexic with Syntax with EnrichedLa
   def inferType(ctx: Context, e: ELC): Either[Error, (Substitution, Type)] = e match {
 
     /* Built-in values (Int, Char, String) */
-    case EInt(_, _) => Right(empty, BaseType.Integer)
-    case EChar(_, _) => Right(empty, BaseType.Character)
-    case EStr(_, _) => Right(empty, BaseType.String)
-    case EReal(_, _) => Right(empty, BaseType.Real)
+    case EInt(_, _) => Right(emptySubst, BaseType.Integer)
+    case EChar(_, _) => Right(emptySubst, BaseType.Character)
+    case EStr(_, _) => Right(emptySubst, BaseType.String)
+    case EReal(_, _) => Right(emptySubst, BaseType.Real)
 
     /* Variables and constructors */
     case EVar(ide, attr) => ctx.lookupFresh(ide) match {
-      case Some(ty) => Right(empty, ty)
+      case Some(ty) => Right(emptySubst, ty)
       case None => Left(UndefinedError("identifier", ide.toString + " in "+ctx.toString, attr))
     }
     case ECon(con, attr) => ctx.lookupFresh(con) match {
-      case Some(ty) => Right(empty, ty)
+      case Some(ty) => Right(emptySubst, ty)
       case None => Left(UndefinedError("constructor", con.toString, attr))
     }
 
@@ -257,7 +257,7 @@ trait TypeCheckerImpl extends TypeChecker with Lexic with Syntax with EnrichedLa
    * substitution for the context.
    */
   def inferType(ctx: Context, exprs: List[ELC]): Either[Error, (Substitution, List[Type])] = exprs match {
-    case Nil => Right(empty, Nil)
+    case Nil => Right(emptySubst, Nil)
     case e :: es => {
       for (
         s_t <- inferType(ctx, e).right;

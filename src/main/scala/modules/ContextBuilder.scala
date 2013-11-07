@@ -28,21 +28,27 @@
 
 package de.tuberlin.uebb.sl2.modules
 
-trait ByteCodeInterpreter {
-  
-  this: JVMEncoder with Syntax with IMSyntax with Errors =>
+import de.tuberlin.uebb.sl2.modules.Syntax._
+
+trait ContextBuilder {
+  this : Syntax with PatternMatching with ModuleResolver =>
 
   /**
-   * The Bytecode interpreter is capable of evaluating
-   * compiled byte code into the string representation of the resulting SL-value
+   * Constructs the patternmatching context for a given module
+   * (only one implementation so far)
    */
-  def eval(klazz : ClassName, classes : List[JVMClass])  : Either[Error, String]
+  def context(p : Program, i : List[ResolvedImport]) : PatternMatchingCtxt = {
+    val lctxt = PatternMatchingCtxt() ++ (for (
+      data <- p.dataDefs; 
+      c <- data.constructors;
+      constructors = Set() ++ data.constructors.map(c => ConVar(c.constructor))
+    ) yield {
+      PatternMatchingCtxt(Map(ConVar(c.constructor) -> c.types.size), 
+                          Map(ConVar(c.constructor) -> constructors))
+    })
+    
+    lctxt
+  }
 
-  /**
-   * The Bytecode interpreter is capable of evaluating
-   * compiled byte code into the jvm representation of the resulting SL-value
-   */
-  def evalToObject(klazz : ClassName, classes : List[JVMClass])  : Either[Error, Any]
 
-  
 }

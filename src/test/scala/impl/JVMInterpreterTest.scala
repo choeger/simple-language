@@ -25,24 +25,29 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+package de.tuberlin.uebb.sl2.tests.impl
 
-package de.tuberlin.uebb.sl2.modules
+import de.tuberlin.uebb.sl2.impl._
+import de.tuberlin.uebb.sl2.tests.specs._
 
-trait ByteCodeInterpreter {
+import scalax.file.{Path, FileSystem}
+import scalax.file.ImplicitConverters._
+
+class JVMInterpreterTest extends InterpreterSpec
+  with JVMCompiler
+  with JVMClassInterpreter
+  with ParboiledParser
+{
+
+  private var testEvalNr = 0
+
+  def freshClassName = { 
+    val name = ClassName("JVMInterpreterTest"::"sl2"::Nil, "TestCase" + testEvalNr, Nil)
+    testEvalNr = testEvalNr + 1
+    name
+  }
   
-  this: JVMEncoder with Syntax with IMSyntax with Errors =>
+  def config = Config(Path("."), Nil, Path("."), "", Path("."), 
+                      Path.createTempDirectory(deleteOnExit=false))
 
-  /**
-   * The Bytecode interpreter is capable of evaluating
-   * compiled byte code into the string representation of the resulting SL-value
-   */
-  def eval(klazz : ClassName, classes : List[JVMClass])  : Either[Error, String]
-
-  /**
-   * The Bytecode interpreter is capable of evaluating
-   * compiled byte code into the jvm representation of the resulting SL-value
-   */
-  def evalToObject(klazz : ClassName, classes : List[JVMClass])  : Either[Error, Any]
-
-  
 }

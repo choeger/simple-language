@@ -28,6 +28,7 @@
 
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.FunSpec
 import de.tuberlin.uebb.sl2.modules._
@@ -35,7 +36,7 @@ import de.tuberlin.uebb.sl2.specs.SLPrelude
 
 import scalax.file._;
 
-trait ContextAnalysisSpec extends FunSpec with ShouldMatchers {
+trait ContextAnalysisSpec extends FunSpecLike with Matchers {
 
   this: ProgramChecker with Syntax with SLExpressions 
   	with ModuleResolver with ModuleNormalizer with Errors with Configs =>

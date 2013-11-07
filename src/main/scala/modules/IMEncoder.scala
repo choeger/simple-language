@@ -29,7 +29,7 @@
 package de.tuberlin.uebb.sl2.modules
 
 trait IMEncoder {
-  this : Syntax with IMSyntax with PatternMatching =>
+  this : Syntax with IMSyntax with PatternMatching with Configs =>
 
   sealed case class IMEncodingEnv(currentModule : ClassName, 
                                   localNames : Set[String],                                  
@@ -37,5 +37,7 @@ trait IMEncoder {
                                   data : PatternMatchingCtxt)
 
   def encode(env : IMEncodingEnv, prog : Program) : IMModuleClass
+
+  def config : Config
 
 }

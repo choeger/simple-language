@@ -1,12 +1,13 @@
 package de.tuberlin.uebb.sl2.tests.specs
 
+import org.scalatest._
 import org.scalatest.matchers._
 import org.scalatest.FunSpec
 import scala.language.implicitConversions
 import de.tuberlin.uebb.sl2.modules._
 import de.tuberlin.uebb.sl2.impl.ParboiledParser
 
-trait SignatureSerializerSpec extends FunSpec with ShouldMatchers with ParboiledParser {
+trait SignatureSerializerSpec extends FunSpecLike with Matchers with ParboiledParser {
   this : SignatureSerializer with Syntax with Errors =>
 
   def testedImplementationName(): String

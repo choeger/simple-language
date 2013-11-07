@@ -41,138 +41,89 @@ import scalax.file.ImplicitConverters._
 
 import scala.language.reflectiveCalls // used for asFile
 
-object Interpreter
-    extends CombinatorParser 
-    with Syntax
-    with SyntaxTraversal
-    with Errors
-    with Configs
-    with Lexic
-    with EnrichedLambdaCalculus
-    with Type
-    with NameSupply
-    with Context
-    with Substitution
-    with Unification
-    with GraphImpl[VarFirstClass]
-    with LetRecSplitter
-    with DTCheckerImpl
-    with FDCheckerImpl
-    with TypeCheckerImpl
-    with ProgramCheckerImpl
-    with SimpleIMEncoder
-    with MultiDriver
-    with SignatureJsonSerializer
-    with ModuleResolverImpl
-    with ModuleNormalizerImpl
-    with ModuleContextImpl
-    with ModuleLinearization
-    with REPL
-    with ASMBasedJVMEncoder
-    with JVMClassInterpreter
+object Interpreter extends CombinatorParser  with REPL
+with JVMCompiler with JVMClassInterpreter
 {   
 
-    sealed abstract class Mode
-    case object ExprMode extends Mode
-    case object ModMode extends Mode
+  sealed abstract class Mode
+  case object ExprMode extends Mode
+  case object ModMode extends Mode
 
-    object SwitchExprMode {
-      def unapply(x : String) : Boolean = {
-        x == ":expr"
-      }
+  object SwitchExprMode {
+    def unapply(x : String) : Boolean = {
+      x == ":expr"
     }
+  }
 
-    object SwitchModuleMode {
-      def unapply(x : String) : Boolean = {
-        x == ":mod"
-      }
+  object SwitchModuleMode {
+    def unapply(x : String) : Boolean = {
+      x == ":mod"
     }
+  }
 
-    object SomeCommand {
-      def unapply(x : String) : Option[String] = {
-        if (x.startsWith(":")) Some(x.tail) else None
-      }
+  object SomeCommand {
+    def unapply(x : String) : Option[String] = {
+      if (x.startsWith(":")) Some(x.tail) else None
     }
+  }
 
-    private var mode:Mode = ExprMode
-      
-    private val baseClass = ClassName("Interpreter"::"sl2"::Nil, "Session", Nil)
+  private var mode:Mode = ExprMode
+  
+  private val baseClass = ClassName("Interpreter"::"sl2"::Nil, "Session", Nil)
     
-    private var current = Program(Nil, Map(), Map(), Nil)
+  private var current = Program(Nil, Map(), Map(), Nil)
 
-    private var config = Config(Path("."), Nil, Path("."), "", Path("."), 
-                                Path.createTempDirectory(deleteOnExit=false))
-
-    def banner = "Simulation Language Interpreter"
+  def config = Config(Path("."), Nil, Path("."), "", Path("."), 
+                      Path.createTempDirectory(deleteOnExit=false))
+  
+  def banner = "Simulation Language Interpreter"
     
-    def currentContext(p : Program) = {    
-      for (
-        // check and load dependencies
-        dependencies <- inferDependencies(p, config).right;
-        // type check the program
-        _ <- checkProgram(current, normalizeModules(dependencies)).right            
-      ) yield context(current, dependencies)      
-    }
+  def currentContext(p : Program) = {    
+    for (
+      // check and load dependencies
+      dependencies <- inferDependencies(p, config).right;
+      // type check the program
+      _ <- checkProgram(current, normalizeModules(dependencies)).right            
+    ) yield context(current, dependencies)      
+  }
 
-    def context(p : Program, i : List[ResolvedImport]) : PatternMatchingCtxt = {
-      val lctxt = PatternMatchingCtxt() ++ (for (
-        data <- p.dataDefs; 
-        c <- data.constructors;
-        constructors = Set() ++ data.constructors.map(c => ConVar(c.constructor))
-      ) yield {
-        PatternMatchingCtxt(Map(ConVar(c.constructor) -> c.types.size), 
-                            Map(ConVar(c.constructor) -> constructors))
-      })
-
-      lctxt
-    }
-
-    var exprCounter : Int = 0
+  var exprCounter : Int = 0
     
-    def className : ClassName = {
-      baseClass $ ("Expr_" + exprCounter)
-    }
+  def className : ClassName = {
+    baseClass $ ("Expr_" + exprCounter)
+  }
 
-    def updateProg(line : String) = {
-      for (e <- parseExpr(line).right) yield 
-        current.copy(functionDefs = current.functionDefs + ("eval" -> (FunctionDef(Nil, e)::Nil)))
-    }
+  def updateProg(line : String) = {
+    for (e <- parseExpr(line).right) yield 
+      current.copy(functionDefs = current.functionDefs + ("eval" -> (FunctionDef(Nil, e)::Nil)))
+  }
 
-    def processline (line : String) = {
-      line match {
-        case SwitchModuleMode() => mode = ModMode
-        case SwitchExprMode() => mode = ExprMode
-        case SomeCommand(x) => emitter.emitln("No comprendo: '" + x + "'")
-        case _ => mode match {
-          case ExprMode => {
-            val res : Either[Error, (Program, PatternMatchingCtxt)] = 
-              for(prog <- updateProg(line).right ; 
-                  ctxt <- currentContext(prog).right) yield (prog, ctxt)
-
-            res match {
-              case Right(r) => {
-                val (prog, ctxt) = r
-                val main = encode(IMEncodingEnv(className, Set(), Map(), ctxt), prog)
-                emitter.emitln("Compiling in " + className)
-                val bytes = encode(JVMEncodingCtxt(), main)
-                decodeToStdOut(bytes)
-
-                emitter.emitln(eval(className, bytes))
-                exprCounter = exprCounter + 1
-              }
-              case Left(err) => emitter.emitln(err)
+  def processline (line : String) = {
+    line match {
+      case SwitchModuleMode() => mode = ModMode
+      case SwitchExprMode() => mode = ExprMode
+      case SomeCommand(x) => emitter.emitln("No comprendo: '" + x + "'")
+      case _ => mode match {
+        case ExprMode => {
+          val res : Either[Error, List[JVMClass]] = compileExpr(className, "eval", line)
+          
+          res match {
+            case Right(classes) => {
+              emitter.emitln(eval(className, classes))
+              exprCounter = exprCounter + 1
             }
+            case Left(err) => emitter.emitln(err)
           }
-          case ModMode => {
-            emitter.emit("Module mode NYI")
-          }
+        }
+        case ModMode => {
+          emitter.emit("Module mode NYI")
         }
       }
     }
+  }
       
-    override def prompt = mode match {
-      case ExprMode => "SL[e]>"
-      case ModMode => "SL[m]>"
-    }
-
+  override def prompt = mode match {
+    case ExprMode => "SL[e]>"
+    case ModMode => "SL[m]>"
+  }
 }

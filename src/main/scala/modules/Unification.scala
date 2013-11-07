@@ -105,7 +105,7 @@ trait Unification {
    *         substitution that unifies all equations of the input.
    */
   def unify(equations: List[Equation]): Either[Error, Substitution] = equations match {
-    case Nil => Right(empty)
+    case Nil => Right(emptySubst)
     case e :: eqs => (e.leftHandSide, e.rightHandSide) match {
       case (s, t) if s == t => unify(eqs)
 

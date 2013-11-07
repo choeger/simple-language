@@ -13,7 +13,7 @@ scalaVersion := "2.10.3"
 scalacOptions ++= Seq("-deprecation", "-feature")
 
 libraryDependencies ++= Seq(
-	"org.scalatest" %% "scalatest" % "1.9.1",
+	"org.scalatest" %% "scalatest" % "2.0",
 	"org.parboiled" %% "parboiled-scala" % "1.1.4",
 	"com.googlecode.kiama" %% "kiama" % "1.4.0",
 	"net.sf.jgrapht" % "jgrapht" % "0.8.3",
