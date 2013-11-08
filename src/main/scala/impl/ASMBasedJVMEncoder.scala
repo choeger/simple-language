@@ -91,16 +91,16 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
       mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Integer", "<init>", "(I)V")
     }
     case IMConstChar(v) => {
-      mv.visitTypeInsn(NEW, "java/lang/Char")
+      mv.visitTypeInsn(NEW, "java/lang/Character")
       mv.visitInsn(DUP) 
-      mv.visitLdcInsn(v)         
-      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Char", "<init>", "(C)V")        
+      mv.visitIntInsn(BIPUSH, v)         
+      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Character", "<init>", "(C)V")        
     }
     case IMConstString(v) => {
       mv.visitTypeInsn(NEW, "java/lang/String")
       mv.visitInsn(DUP) 
       mv.visitLdcInsn(v)         
-      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/String", "<init>", "(S)V")
+      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/String", "<init>", "(Ljava/lang/String;)V")
     }
     case IMConstReal(v) => {
       mv.visitTypeInsn(NEW, "java/lang/Double")

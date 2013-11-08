@@ -114,6 +114,11 @@ trait InterpreterSpec
          |DEF test = "42"""".compiled.evaluated("test")) should result_correctly_in(""""42"""".evaluated)
     }
 
+    it("Should compile real literals correctly") {
+      """PUBLIC FUN test: Real
+         |DEF test = 42.0""".compiled.evaluated("test") should result_correctly_in("42.0".evaluated) 
+    }
+
     it("Should compile addition correctly") {
       ("""PUBLIC FUN test: Int
       	 |DEF test = 40 + 2""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
