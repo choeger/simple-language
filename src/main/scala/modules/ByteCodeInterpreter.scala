@@ -36,13 +36,19 @@ trait ByteCodeInterpreter {
    * The Bytecode interpreter is capable of evaluating
    * compiled byte code into the string representation of the resulting SL-value
    */
-  def eval(klazz : ClassName, classes : List[JVMClass])  : Either[Error, String]
+  def eval(klazz : ClassName, fn : String, classes : List[JVMClass])  : Either[Error, String]
 
   /**
    * The Bytecode interpreter is capable of evaluating
    * compiled byte code into the jvm representation of the resulting SL-value
+   *
+   * @param klazz the name of the IM class 
+   *
+   * @param fn the name of the constant to evaluate in @link{klazz}
+   *
+   * @classes the compiled set of modules
    */
-  def evalToObject(klazz : ClassName, classes : List[JVMClass])  : Either[Error, Any]
+  def evalToObject(klazz : ClassName, fn : String, classes : List[JVMClass])  : Either[Error, Any]
 
   
 }

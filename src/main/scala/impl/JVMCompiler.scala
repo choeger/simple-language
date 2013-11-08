@@ -63,7 +63,7 @@ with ContextBuilder {
   }
 
   def buildModule(name : String, e : Expr) = {
-    Program(Nil, Map(), Map(), Nil)
+    Program(Nil, Map(), Map(name -> (FunctionDef(Nil, e)::Nil)), Nil)
   }
 
   /**
@@ -86,7 +86,13 @@ with ContextBuilder {
     ) yield { 
       val ctxt = context(p, dependencies)
       val main = encode(IMEncodingEnv(className, Set(), Map(), ctxt), p)
-      encode(JVMEncodingCtxt(), main)
+      val classes = encode(JVMEncodingCtxt(), main)
+      
+      for (klazz <- classes) {
+        val ao = config.destination / (klazz.name.toString + ".class")
+        ao.write(klazz.code) 
+      }
+      classes
     }
   }
 

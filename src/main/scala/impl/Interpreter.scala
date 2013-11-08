@@ -109,7 +109,7 @@ with JVMCompiler with JVMClassInterpreter
           
           res match {
             case Right(classes) => {
-              emitter.emitln(eval(className, classes))
+              emitter.emitln(eval(className, "eval", classes))
               exprCounter = exprCounter + 1
             }
             case Left(err) => emitter.emitln(err)

@@ -66,24 +66,24 @@ trait JVMClassInterpreter extends ByteCodeInterpreter with Syntax with Errors wi
     case _ => Left(GenericError("Decoding of '%s' failed".format(o)))
   }
 
-  def eval(klazz : ClassName, classes : List[JVMClass]) : Either[Error, String] = {
-    for (o <- evalToObject(klazz, classes).right ; dec <- decode(o).right)
+  def eval(klazz : ClassName, fn : String, classes : List[JVMClass]) : Either[Error, String] = {
+    for (o <- evalToObject(klazz, fn, classes).right ; dec <- decode(o).right)
       yield dec
   }
 
   /**
    * Load bytecode as JVM class and execute its "eval" method.
    */
-  def evalToObject(klazz : ClassName, classes : List[JVMClass]) : Either[Error, Object] = {
+  def evalToObject(klazz : ClassName, fn : String, classes : List[JVMClass]) : Either[Error, Object] = {
     try {
       dynamicClassLoader.clearCache
       dynamicClassLoader.define(classes)
       val created = dynamicClassLoader.load(klazz)
-      val method = created.getMethod("eval")
+      val method = created.getMethod(fn)
       Right(method.invoke(null))
     } catch {
       case t:Throwable => {
-        Left(GenericError(t.getMessage))
+        Left(GenericError(t.toString))
       }
     }
   }

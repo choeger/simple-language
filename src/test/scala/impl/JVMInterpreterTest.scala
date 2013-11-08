@@ -47,7 +47,9 @@ class JVMInterpreterTest extends InterpreterSpec
     name
   }
   
-  def config = Config(Path("."), Nil, Path("."), "", Path("."), 
-                      Path.createTempDirectory(deleteOnExit=false))
+  private val _config = Config(Path("."), Nil, Path("."), "", Path("."), 
+                               Path.createTempDirectory(deleteOnExit=false))
+
+  def config = _config
 
 }
