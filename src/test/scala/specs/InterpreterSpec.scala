@@ -187,6 +187,38 @@ trait InterpreterSpec
       }
   }
 
+  describe("Compiling constants") {
+    it("Evaluate the declarations in order of dependency") {
+      (constants+"\n"+
+       """PUBLIC FUN test: a
+         |DEF test = c3""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
+    }
+
+    it("Should hide constants by LETs") {
+      (constants+"\n"+
+       """PUBLIC FUN test: a
+         |DEF test = l3""").compiled.evaluated("test") should result_correctly_in("3".evaluated)
+    }
+
+    it("Should correctly evaluate shadowed right hand sides") {
+      (constants+"\n"+
+       """PUBLIC FUN test: a
+         |DEF test = l1""").compiled.evaluated("test") should result_correctly_in("1".evaluated)
+    }
+
+    it("Should correctly evaluate shadowed calculating right hand sides") {
+      (constants+"\n"+
+       """PUBLIC FUN test: a
+         |DEF test = l2""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
+    }
+
+    it("Should correctly capture closure variables") {
+      (constants+"\n"+
+       """PUBLIC FUN test: a
+         |DEF test = l4""").compiled.evaluated("test") should result_correctly_in("8".evaluated)
+    }
+  }
+
   
   describe("Compiling (recursive) function definitions") {
 
@@ -271,37 +303,6 @@ trait InterpreterSpec
   }
 
 
-  describe("Compiling constants") {
-    it("Evaluate the declarations in order of dependency") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = c3""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
-    }
-
-    it("Should hide constants by LETs") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l3""").compiled.evaluated("test") should result_correctly_in("3".evaluated)
-    }
-
-    it("Should correctly evaluate shadowed right hand sides") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l1""").compiled.evaluated("test") should result_correctly_in("1".evaluated)
-    }
-
-    it("Should correctly evaluate shadowed calculating right hand sides") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l2""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
-    }
-
-    it("Should correctly capture closure variables") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l4""").compiled.evaluated("test") should result_correctly_in("8".evaluated)
-    }
-  }
 
 
   describe("Compiling functions using pattern matching") {

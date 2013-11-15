@@ -53,7 +53,6 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
                              dispatch : MethodVisitor) {
     def toByteCode : JVMClass = {
       writer.visitEnd()
-      println("Compiling " + name.jvmString)
       JVMClass(name, writer.toByteArray)
     }
   }
@@ -147,7 +146,6 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
   
   def makeDispatch(aLabels : Array[Label])(cls : (Int, IMCode)) : ASMEncoder[Int] = {
     val (i,c) = cls
-    println("Compiling Closure " + aLabels(i))
     for (current <- currentModule ;
          dispatch = current.dispatch ;
          _ = dispatch.visitLabel(aLabels(i)) ;
@@ -157,8 +155,7 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
 
   def compileDispatchs(aLabels : Array[Label]) : ASMEncoder[List[Int]] = {
     for (state <- get[ASMEncodingState] ;
-         clss <- state.closures.toList.map(makeDispatch(aLabels)).sequence ;
-         _ = println("Compiled: " + aLabels.toList.toString))
+         clss <- state.closures.toList.map(makeDispatch(aLabels)).sequence)
       yield clss
   }
 
@@ -167,7 +164,7 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
          current <- currentModule ;
          aLabels <- dispatchLabels ;
          dflt = new Label ;
-         _ = { println(List(aLabels.toList.mkString(", "), current.dispatch, dflt).mkString("; ")) } ;
+
          _ = if (aLabels.size > 0) {
                current.dispatch.visitVarInsn(ILOAD, 1) 
                current.dispatch.visitTableSwitchInsn(0, aLabels.size-1, dflt, aLabels:_*)               

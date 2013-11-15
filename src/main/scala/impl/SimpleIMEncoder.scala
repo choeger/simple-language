@@ -209,7 +209,6 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
 
       case ExVar(Var(i, LocalMod), _) => names(i)
       case ExVar(Var(i, mod), _) => {
-        println("Found " + i + " in " + mod)
         IMStaticAcc(env.modules(mod), ClassField(i, TObject))
       }
 
