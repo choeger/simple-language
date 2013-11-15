@@ -36,5 +36,5 @@ public interface Closure {
     /**
      * Apply this closure to the given argument
      */    
-    Object eval(Object arg);    
+    Object apply(Object arg);    
 }

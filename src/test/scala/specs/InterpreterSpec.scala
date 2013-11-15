@@ -89,97 +89,129 @@ trait InterpreterSpec
  
   describe("An SL Compiler") {
     
-    it("Should compile the 'True' literal correctly ") {
-      ("""PUBLIC FUN test: Bool
-         |DEF test = True""".compiled.evaluated("test")) should (result_correctly_in("true".evaluated))
-    }
+    describe("Handling literals") {
+      it("Should compile the 'True' literal correctly ") {
+        ("""PUBLIC FUN test: Bool
+         |DEF test = True""".compiled.evaluated("test")) should be (Right(EvaluationResult(true)))
+      }
 
-    it("Should compile the 'False' literal correctly") {
-      ("""PUBLIC FUN test: Bool
-         |DEF test = False""".compiled.evaluated("test")) should result_correctly_in("false".evaluated)
-    }
+      it("Should compile the 'False' literal correctly") {
+        ("""PUBLIC FUN test: Bool
+         |DEF test = False""".compiled.evaluated("test")) should be (Right(EvaluationResult(false)))
+      }
 
-    it("Should compile integer literals correctly") {
-      ("""PUBLIC FUN test: Int
+      it("Should compile integer literals correctly") {
+        ("""PUBLIC FUN test: Int
       	 |DEF test = 42""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
-    }
+      }
 
-    it("Should compile character literals correctly") {
-      ("""PUBLIC FUN test: Char
+      it("Should compile character literals correctly") {
+        ("""PUBLIC FUN test: Char
       	 |DEF test = 'c'""".compiled.evaluated("test")) should result_correctly_in("'c'".evaluated)
-    }
+      }
+      
+      it("Should compile string literals correctly") {
+        ("""PUBLIC FUN test: String
+         |DEF test = "42"""".compiled.evaluated("test")) should be(Right(EvaluationResult("42")))
+      }
 
-    it("Should compile string literals correctly") {
-      ("""PUBLIC FUN test: String
-         |DEF test = "42"""".compiled.evaluated("test")) should result_correctly_in(""""42"""".evaluated)
+      it("Should compile real literals correctly") {
+        """PUBLIC FUN test: Real
+        |DEF test = 42.0""".compiled.evaluated("test") should be(Right(EvaluationResult(42.0)))
+      }
     }
+    
+    describe("handling the prelude") {
+        it("Should compile addition correctly") {
+          ("""PUBLIC FUN test: Int
+      	   |DEF test = 40 + 2""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
+        }
 
-    it("Should compile real literals correctly") {
-      """PUBLIC FUN test: Real
-         |DEF test = 42.0""".compiled.evaluated("test") should result_correctly_in("42.0".evaluated) 
-    }
+        it("Should compile string concatenation correctly") {
+          ("""PUBLIC FUN test: String
+           |DEF test = "a" ++ "b"""".compiled.evaluated("test")) should result_correctly_in(""""ab"""".evaluated)
+        }
 
-    it("Should compile addition correctly") {
-      ("""PUBLIC FUN test: Int
-      	 |DEF test = 40 + 2""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
-    }
+        it("Should compile multiplication correctly") {
+          ("""PUBLIC FUN test: Int
+      	   |DEF test = 40 * 2""".compiled.evaluated("test")) should result_correctly_in("80".evaluated)
+        }
 
-    it("Should compile string concatenation correctly") {
-      ("""PUBLIC FUN test: String
-         |DEF test = "a" ++ "b"""".compiled.evaluated("test")) should result_correctly_in(""" "ab" """.evaluated)
-    }
+        it("Should compile division correctly") {
+          ("""PUBLIC FUN test: Int
+      	   |DEF test = 40 / 2""".compiled.evaluated("test")) should result_correctly_in("20".evaluated)
+        }
 
-    it("Should compile multiplication correctly") {
-      ("""PUBLIC FUN test: Int
-      	 |DEF test = 40 * 2""".compiled.evaluated("test")) should result_correctly_in("80".evaluated)
-    }
+        it("Should round integer division") {
+          ("""PUBLIC FUN test: Int
+      	   |DEF test = 5 / 2""".compiled.evaluated("test")) should result_correctly_in("2".evaluated)
+        }
 
-    it("Should compile division correctly") {
-      ("""PUBLIC FUN test: Int
-      	 |DEF test = 40 / 2""".compiled.evaluated("test")) should result_correctly_in("20".evaluated)
-    }
+        it("Should compile subtraction correctly") {
+          ("""PUBLIC FUN test: Int
+      	   |DEF test = 44 - 2""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
+        }
+      }
+      
+      describe("handling conditionals") {
+        it("Should compile if-then-else correctly") {
+          ("""PUBLIC FUN test: Int
+      	   |DEF test = IF True THEN 42 ELSE 23""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
+        }
 
-    it("Should round integer division") {
-      ("""PUBLIC FUN test: Int
-      	 |DEF test = 5 / 2""".compiled.evaluated("test")) should result_correctly_in("2".evaluated)
-    }
+        it("Should allow for complex condititons") {
+          "IF 39 + 2 < 42 THEN 42 ELSE 39".evaluated should be (Right(EvaluationResult(42)))
+        }
 
-    it("Should compile subtraction correctly") {
-      ("""PUBLIC FUN test: Int
-      	 |DEF test = 44 - 2""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
-    }
+        it("Should allow for complex bodies") {
+          "IF False THEN 13 ELSE ((13 + 7) * 2) + 2".evaluated should be (Right(EvaluationResult(42)))
+        }
+      }
 
-    it("Should compile if-then-else correctly") {
-      ("""PUBLIC FUN test: Int
-      	 |DEF test = IF True THEN 42 ELSE 23""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
-    }
+      describe("handling lambda-expressions") {
 
-    it("Should compile the identity lambda expression correctly") {
-      ("""PUBLIC FUN test: Int
-      	 |DEF test = (\ x . x) 42""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
-    }
+        it("Should compile the identity lambda expression correctly") {
+          ("""PUBLIC FUN test: Int
+      	   |DEF test = (\ x . x) 42""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
+        }
 
-    it("Should compile lambdas with multiple arguments correctly") {
-      ("""PUBLIC FUN test: Int
-         |DEF test = (\x y. x) 1 2""".compiled.evaluated("test")) should result_correctly_in("1".evaluated)
-    }
+        it("Should compile lambdas with multiple arguments correctly") {
+          ("""PUBLIC FUN test: Int
+           |DEF test = (\x y. x) 1 2""".compiled.evaluated("test")) should result_correctly_in("1".evaluated)
+        }
+
+        it("Should compile lambdas with many arguments correctly") {
+          ("""PUBLIC FUN test: Int
+           |DEF test = (\a b c d e. a * e) 1 2 3 4 5""".compiled.evaluated("test")) should result_correctly_in("5".evaluated)
+        }
+      }
   }
 
-
-  describe("Compiling function definitions") {
+  
+  describe("Compiling (recursive) function definitions") {
 
     it("Should compile the identity function correctly") {
-      ("""DEF id x = x
+      ("""DEF id2 x = x
       	 |PUBLIC FUN test: Int
-      	 |DEF test = id 42""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
+      	 |DEF test = id2 42""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
     }
 
     it("Should compile the factorial function correctly") {
       ("""DEF fac n = IF n == 1 THEN 1 ELSE n * fac (n - 1)
          |PUBLIC FUN test: Int
-         |DEF test = fac 13""".compiled.evaluated("test")) should result_correctly_in("6227020800".evaluated)
+         |DEF test = fac 12""".compiled.evaluated("test")) should result_correctly_in("479001600".evaluated)
     }
 
+    it("Should compile mutually recursive DEFs") {
+      """DEF even n = IF n == 0 THEN True ELSE odd (n - 1)
+        |DEF odd n = IF n == 1 THEN True ELSE even (n - 1)
+        |DEF test = even 100
+      """.compiled.evaluated("test") should result_correctly_in("True".evaluated)
+    }
+    
+  }
+
+  /*  
     it("Should compile the head and tail function correctly") {
       ("""IMPORT "std/list" AS L
          |DEF head (L.Cons x xs) = x
@@ -577,6 +609,6 @@ trait InterpreterSpec
        """PUBLIC FUN test: f
          |DEF test = f""").compiled.evaluated("test") should result_correctly_in("-590".evaluated)
     }
-  }
+  }*/
 
 }

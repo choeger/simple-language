@@ -29,7 +29,7 @@ trait ModuleResolver {
       override val file: Path,
       override val signature: Program,
       override val ast: UnqualifiedImport) extends ResolvedModuleImport(
-          "$$"+path.replace('/', '$'), path, file, signature, ast)
+          hierarchicName2Uniq(path), path, file, signature, ast)
   
   case class ResolvedQualifiedImport(
       override val name: ModuleVar,
@@ -38,7 +38,9 @@ trait ModuleResolver {
       override val signature: Program,
       override val ast: QualifiedImport)
     extends ResolvedModuleImport(name, path, file, signature, ast)
-    
+  
+  def hierarchicName2Uniq(path : String) = "$$"+path.replace('/', '$')
+
   def inferDependencies(program: AST, config: Config): Either[Error, List[ResolvedImport]]
   def resolveDependencies(program: AST, config: Config): Either[Error, Set[String]]
   

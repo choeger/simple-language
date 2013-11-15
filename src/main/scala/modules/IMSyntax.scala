@@ -33,11 +33,15 @@ package de.tuberlin.uebb.sl2.modules
  * This requires closure-conversion and pattern matching
  * de-sugaring.
  */
-trait IMSyntax {
+trait IMSyntax extends PreProcessing {
   
   type IMName = String
  
-  sealed case class ClassField(name : String, tipe : IMType)
+  sealed class ClassField private (val name : String, val tipe : IMType)
+  
+  object ClassField {
+    def apply(name : String, tipe : IMType) = new ClassField(escapeIde(name), tipe)
+  }
 
   sealed case class ClassName(pkg : List[String], main : String, internal : List[String]) {
     override def toString() = 
@@ -53,7 +57,22 @@ trait IMSyntax {
   sealed abstract class IMCode
   
   case class IMCons(klazz : ClassName, args : List[IMCode]) extends IMCode
-  case class IMVar(name : IMName) extends IMCode
+
+  /**
+   * A closure creation
+   *
+   * @parm env The captured environment in '''reverse''' order, i.e.
+   *           last(env) = __env[0]
+   */
+  case class IMCapture(nr : Int, env : List[IMCode]) extends IMCode
+
+  case class IMVar(owner : ClassName, name : IMName) extends IMCode
+  case class IMMethodArg(nr : Int) extends IMCode
+
+  case class IMLocalVar(name : IMName) extends IMCode
+  case class IMClosureVar(nr : Int) extends IMCode
+  case class IMArgument(nr : Int) extends IMCode
+  case object IMClosureSelf extends IMCode
 
   case class IMApp(lhs : IMCode, rhs : IMCode) extends IMCode
   
@@ -74,21 +93,20 @@ trait IMSyntax {
   case class IMConstReal(value: Double) extends IMCode
   case class IMMatchFail(constructor : String) extends IMCode
   
-  sealed abstract class IMType
-  case object TDouble extends IMType
-  case object TInt extends IMType
-  case object TChar extends IMType
-  case object TString extends IMType
-  case object TObject extends IMType
-  case class TClass(name : ClassName) extends IMType
+  sealed abstract class IMType(val desc : String)
+  case object TDouble extends IMType("Ljava/lang/Double;")
+  case object TInt extends IMType("Ljava/lang/String;"  )
+  case object TChar extends IMType("Ljava/lang/Character;")
+  case object TString extends IMType("Ljava/lang/String;")
+  case object TObject extends IMType("Ljava/lang/Object;")
+  case class TClass(name : ClassName) extends IMType(name.jvmString)
   
   sealed abstract class IMClass(val name : ClassName)
   case class IMDataClass(override val name : ClassName, fields : List[ClassField]) extends IMClass(name)
-  case class IMClosureClass(override val name : ClassName, rhs : IMCode) extends IMClass(name)
   case class IMModuleClass(override val name : ClassName, elements : List[IMModuleElement]) extends IMClass(name)
 
   sealed abstract class IMModuleElement
-  case class IMSubClass(klazz : IMClass) extends IMModuleElement
+  case class IMClosure(nr : Int, code : IMCode) extends IMModuleElement
   case class IMConstant(name : String, value : IMCode) extends IMModuleElement
 
 }

@@ -26,18 +26,23 @@
  *
  */
 
-package de.tuberlin.uebb.sl2.modules
+package de.tuberlin.uebb.sl2.runtime;
 
-trait IMEncoder {
-  this : Syntax with IMSyntax with PatternMatching with Configs =>
+/**
+ * Represents an invalid code invocation
+ */
+public class IllegalCodeException extends java.lang.Exception {
+    
+    public final int indx;
+    public final Class<?> klazz;
 
-  sealed case class IMEncodingEnv(currentModule : ClassName,
-                                  names : Map[String, IMCode],
-                                  modules : Map[String, ClassName],
-                                  data : PatternMatchingCtxt)
+    public IllegalCodeException(int i, Class<?> c) {
+	this.indx = i;
+	this.klazz = c;
+    }
 
-  def encode(env : IMEncodingEnv, prog : Program) : IMModuleClass
-
-  def config : Config
-
+    public String getMessage() {
+	return "Illegal code offset " + indx + " by " + klazz.toString();
+    }
+    
 }

@@ -76,6 +76,21 @@ with ContextBuilder {
     ) yield classes
   }
 
+  def moduleClassName(name : String) = {
+    val (hd::rest) = (jvmClassPrefix ++ name.split("/").toList).reverse
+    ClassName(rest, hd, Nil)    
+  }
+
+  def jvmClassPrefix = "de"::"tuberlin"::"uebb"::"sl2c"::Nil
+
+  def moduleCtxt(deps : List[ResolvedImport]) 
+    : Map[String, ClassName] = deps match {    
+    case Nil => Map()
+    case (i:ResolvedModuleImport)::rest => {
+      moduleCtxt(rest) + (i.name -> moduleClassName(i.path))
+    }
+  }
+
   def doCompileModule(className : ClassName, p : Program) = {
     for (
         // check and load dependencies
@@ -84,8 +99,15 @@ with ContextBuilder {
         // type check the program
         _ <- checkProgram(p, normalizeModules(dependencies)).right
     ) yield { 
-      val ctxt = context(p, dependencies)
-      val main = encode(IMEncodingEnv(className, Set(), Map(), ctxt), p)
+      val qualifiedProg = qualifyUnqualifiedModules(p, dependencies)
+      val ctxt = context(qualifiedProg, dependencies)
+      
+      val localCtxt = Map() ++ qualifiedProg.functionDefs.keys.map(k => 
+        (k -> IMStaticAcc(className, ClassField(k, TObject))))
+      
+      val modCtxt = moduleCtxt(dependencies)
+
+      val main = encode(IMEncodingEnv(className, localCtxt, modCtxt, ctxt), qualifiedProg)
       val classes = encode(JVMEncodingCtxt(), main)
       
       for (klazz <- classes) {

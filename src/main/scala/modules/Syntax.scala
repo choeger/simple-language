@@ -341,23 +341,81 @@ trait Syntax {
   }
 
   //TODO: test!
-  def fv(fd: FunctionDef): Set[Var] = {
-    fv(fd.expr) -- (for (p <- fd.patterns; v <- vars(p)) yield Syntax.Var(v))
+  def fv(fd: FunctionDef): Set[Syntax.VarName] = {
+    fv(fd.expr) -- (for (p <- fd.patterns; v <- vars(p)) yield v)
   }
 
-  def fv(expr: Expr): Set[Var] = expr match {
+  def fv(expr: Expr): Set[Syntax.VarName] = expr match {
     case ExCon(_, _) => Set()
     case ConstInt(_, _) => Set()
     case ConstChar(_, _) => Set()
     case ConstString(_, _) => Set()
     case ConstReal(_, _) => Set()
-    case ExVar(x, _) => Set(x)
+    case ExVar(Syntax.Var(x, LocalMod), _) => Set(x)
+    case ExVar(Syntax.Var(x, _), _) => Set()
     case App(l, r, _) => fv(l) ++ fv(r)
-    case Let(defs, rhs, _) => fv(rhs) ++ (for (d <- defs; v <- fv(d.rhs)) yield v) -- defs.map(_.lhs).map(Syntax.Var(_))
+    case Let(defs, rhs, _) => fv(rhs) ++ (for (d <- defs; v <- fv(d.rhs)) yield v) -- defs.map(_.lhs)
     case Conditional(c, t, e, _) => fv(c) ++ fv(t) ++ fv(e)
-    case Lambda(p, rhs, _) => fv(rhs) -- (for (pat <- p; v <- vars(pat)) yield Syntax.Var(v))
+    case Lambda(p, rhs, _) => fv(rhs) -- (for (pat <- p; v <- vars(pat)) yield v)
     case Case(e, a, _) => fv(e) ++ (for (alt <- a; v <- fv(alt.expr)) yield v) -- 
-    (for (alt <- a; v <- vars(alt.pattern)) yield Syntax.Var(v))
+    (for (alt <- a; v <- vars(alt.pattern)) yield v)
+  }
+
+  /**
+   * Is the given variable free '''under''' the given pattern?
+   */
+  def isFree(v : VarName, p : Pattern) = {
+    !vars(p).contains(v)
+  }
+
+  /**
+   * Occurs the given variable free in the given expression ?
+   */
+  def isFree(v : VarName, e : Expr) : Boolean = e match {
+    case ExVar(Syntax.Var(v2, LocalMod), _) => v2 == v
+    case Conditional(c, t, e, _) => isFree(v, c) || isFree(v, t) || isFree(v, e)
+    case Lambda(ps, e, _) => (true /: (ps map {p => isFree(v, p)}))(_ &&_ ) && isFree(v, e)
+      
+    case Case(e, as, _) => isFree(v, e) || ((as map {a => isFree(v, a.pattern)}) :\ false)(_||_)
+    case Let(defs, rhs, _) => (!defs.map(_.lhs).contains(v)) && isFree(v, rhs)
+    case App(l, r, _) => isFree(v, l) || isFree(v, r)
+
+    case _ => false
+  }
+
+  /**
+   * Inline application of v = body in e
+   */
+  def inline(v : VarName, body : Expr)(e : Expr) : Expr = {
+    val il = inline(v, body)_
+   
+    def inlineA(a : Alternative) : Alternative = {
+      if (isFree(v, a.pattern)) 
+        a.copy(expr = inline(v, body)(a.expr))
+      else
+        a
+    }
+
+    def inlineL(d : LetDef) = {
+      if (d.lhs == v) 
+        d
+      else
+        d.copy(rhs = il(d.rhs))
+    }
+
+    if (isFree(v, e))
+      e match {    
+        case ExVar(Syntax.Var(x, LocalMod), _) if x == v => body
+        case Conditional(c, t, e, a) => Conditional(il(c), il(t), il(e), a)
+        case Lambda(p, e, a) => Lambda(p, il(e), a)
+      
+        case Case(e, as, a) => Case(il(e), as map inlineA, a)
+        case Let(defs, rhs, a) => Let(defs map inlineL, il(rhs), a)
+        case App(l, r, a) => App(il(l), il(r), a)
+
+        case _ => e
+      }
+    else e
   }
 
   /**

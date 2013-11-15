@@ -35,10 +35,12 @@ import scala.collection.mutable
 
 trait JVMClassInterpreter extends ByteCodeInterpreter with Syntax with Errors with IMSyntax with JVMEncoder {   
 
+  val currentLoader = this.getClass.getClassLoader
+  
   /**
    * A custom class loader to simplify byte code loading
    */
-  object dynamicClassLoader extends ClassLoader {
+  object dynamicClassLoader extends ClassLoader(currentLoader) {
     private val classCache = mutable.HashMap[String, Class[_]]()
     
     def define(classes : List[JVMClass]) = {
@@ -52,7 +54,7 @@ trait JVMClassInterpreter extends ByteCodeInterpreter with Syntax with Errors wi
       if (classCache.contains(klazz.toString))
         classCache(klazz.toString)
       else
-        super.findClass(klazz.toString)
+        findClass(klazz.toString)
     }
 
     def clearCache() {
@@ -82,7 +84,12 @@ trait JVMClassInterpreter extends ByteCodeInterpreter with Syntax with Errors wi
       val method = created.getMethod(fn)
       Right(method.invoke(null))
     } catch {
+      case t:java.lang.reflect.InvocationTargetException => {
+        t.printStackTrace()
+        Left(GenericError(t.toString + " " + t.getMessage + "\n" + t.getCause.toString))
+      }
       case t:Throwable => {
+        t.printStackTrace()
         Left(GenericError(t.toString))
       }
     }

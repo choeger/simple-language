@@ -37,52 +37,54 @@ import Scalaz._
 
 import scala.language.implicitConversions
 
-trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPatternMatching with Configs {
+trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IMSyntax with WadlerPatternMatching with Configs {
+
 
   def instanceField = ClassField("instance", TObject)
   
-  sealed case class IMEncodingState(classes : List[IMClass] = Nil, freshName : Int = 0)
+  sealed case class IMEncodingState(closures : List[IMClosure] = Nil, 
+                                    freshName : Int = 0, 
+                                    names : Map[String, IMCode] = Map()
+                                  )
 
   type Encoder[A] = State[IMEncodingState, A]
 
-  private def addClass[T <: IMClass](cls : T) : Encoder[T] = { 
-    State({s:IMEncodingState => (s.copy(classes=cls::s.classes), cls)})
+  sealed case class SimpleLambda(arg : IMName, args : List[IMName], code : Expr) 
+
+  def convertLambda(l : Lambda) : SimpleLambda = l match {
+    case Lambda(p::Nil, code, _) => p match {
+        case PatternVar(x, _) => {
+          SimpleLambda(x, Nil, code) 
+        }
+        case p@_ => {
+          SimpleLambda("arg", Nil, Case(ExVar(Var("arg")), Alternative(p, code)::Nil))
+        }
+    }
+    
+    case Lambda(p::ps, rhs, _) => {
+      val SimpleLambda(arg, args, code) = convertLambda(Lambda(ps, rhs))
+
+      p match {
+        case PatternVar(x, _) => {
+          SimpleLambda(x, arg::args, code) 
+        }
+        case p@_ => {
+          SimpleLambda("arg", arg::args, Case(ExVar(Var("arg")), Alternative(p, code)::Nil))
+        }
+      }
+    }
+  }
+
+  private def addClosure(code : IMCode) : Encoder[IMClosure] = { 
+    State({s:IMEncodingState => {
+      val cls = IMClosure(s.closures.size, code)
+      (s.copy(closures=cls::s.closures), cls)}})
   }
 
   implicit def lift(c : IMCode) : Encoder[IMCode] = State({s:IMEncodingState => (s, c)})
 
-  def freshClassName(base : ClassName) : Encoder[ClassName] = {
-    for (s <- get) yield base $ s.classes.size.toString
-  }
-
   def freshVarName : Encoder[IMName] = {
     for (s <- get[IMEncodingState]; c=s.freshName; _ <- put(s.copy(freshName=c+1))) yield "#tmp_"+c
-  }
-
-  /**
-   * Make all closures explicit applications
-   * TODO: check re-implementation using SyntaxTraversal's map()
-   */
-  def explicitClosures(e : Expr) : Expr = e match {
-    case Lambda(_, _, _) => {
-      def mkAbs(e : Expr, v : VarName) = Lambda(PatternVar(v)::Nil, e)
-      def mkApp(e : Expr, v : VarName) = App(e, ExVar(Var(v, LocalMod)))
-
-      val vars = fv(e).toList.collect { case Var(name, LocalMod) => name }
-      (((e /: vars)(mkAbs)) /: vars)(mkApp)
-    }
-
-    case Case(e, as, _) => {
-      Case(e, as map (a => a.copy(expr = explicitClosures(a.expr))))
-    }
-      
-    case App(f, e, _) => App(explicitClosures(f), explicitClosures(e))
-      
-    case Let(defs, r, _) => Let(defs map (d => d.copy(rhs = explicitClosures(d.rhs))), explicitClosures(r))
-
-    case Conditional(c, t, e, _) => Conditional(explicitClosures(c), explicitClosures(t), explicitClosures(e))
-
-    case _ => e
   }
 
   def encode(env : IMEncodingEnv, p : Program) : IMModuleClass = {
@@ -98,9 +100,9 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPat
     object simplePattern {
       def unapply(a : Alternative) : Option[Encoder[SimplePattern]] = a match {
         case Alternative(PatternExpr(ConVar(c, LocalMod), onlyVars(vars), _), expr, _) =>
-          Some(for (r <- enc(expr)) yield SimplePattern(env.currentModule, c, vars, r))
+          Some(for (r <- enc(env.names, expr)) yield SimplePattern(env.currentModule, c, vars, r))
         case Alternative(PatternExpr(ConVar(c, mod), onlyVars(vars), _), expr, _) =>
-          Some(for (r <- enc(expr)) yield SimplePattern(env.modules(mod), c, vars, r))
+          Some(for (r <- enc(env.names, expr)) yield SimplePattern(env.modules(mod), c, vars, r))
         case _ => None
       }
     }
@@ -120,67 +122,96 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPat
       case _ => throw new RuntimeException("Internal Error. Unexpected Pattern: " + e)
     }
 
-    def newClosure(name : ClassName, imB : IMCode) : Encoder[IMClosureClass] = { for {
-      cls <- {
-        val cls = IMClosureClass(name, imB)
-        addClass(cls)
-      }
-    } yield (cls) }
-
     def makeLet(in : IMCode, letDef : LetDef) : Encoder[IMCode] = {
       for {
-        d <- enc(letDef.rhs)
+        d <- enc(env.names, letDef.rhs)
       } yield IMLet(letDef.lhs, d, in)
     }
 
-    def makeClosure(name : ClassName, body : Expr, p : Pattern) : Encoder[IMClosureClass] = {
-      for(im <- enc(Case(ExVar(Var("arg")), Alternative(p, body)::Nil)) ; cls <- newClosure(name, im)) yield cls
+    def zipWithLength[T](l : List[T]) : List[(T, Int)] = l match {
+      case Nil => Nil
+      case x::rest => (x, rest.size)::zipWithLength(rest)
+    }
+    
+    def closureEnv(fv: List[String]) = zipWithLength(fv).map { 
+      case(k,v) => k -> IMClosureVar(v) 
     }
 
-    /* we expect no free vars in the input, closure conversion first! */
-    def enc(s : Expr) : Encoder[IMCode] = s match {
-      case l@Lambda(_, _, _) => {
+    def encClosure(arg : String, rest : List[String], names : Map[String, IMCode], 
+                   closed: List[String], rhs : Expr) : Encoder[IMCode] = rest match {     
+      case Nil => {
+        val localEnv = names ++ closureEnv(closed)
+        enc(localEnv + (arg -> IMArgument(0)), rhs) ;
+      }
+      case x::rest => {
+        val closed2 = arg::closed
+        val localEnv = names ++ closureEnv(closed)
+
         for {
-          name <- freshClassName(env.currentModule) ;
-          cls <- createNamedClosure(l, name)
-        } yield IMStaticAcc(cls.klazz.name, instanceField)
+          c <- encClosure(x, rest, names, closed2, rhs) ;
+          cls <- addClosure(c)          
+        } yield IMCapture(cls.nr, IMArgument(0)::closed.map(localEnv))
+      }
+    }
+
+    def encLambda(names : Map[String, IMCode], s : SimpleLambda) : Encoder[IMCode] = s match {
+
+      case SimpleLambda(arg, rest, rhs) => {
+        val closed = (fv(rhs) - arg -- rest --env.names.keys).toList
+        for (c <- encClosure(arg, rest, names, closed, rhs) ; 
+             cls <- addClosure(c))
+          yield IMCapture(cls.nr, closed.map(names))
+      }
+    }
+
+    def enc(names : Map[String, IMCode], s : Expr) : Encoder[IMCode] = s match {
+      case l@Lambda(_, _, _) => {
+        encLambda(names, convertLambda(l))
+      }
+
+      /*
+       * Special case: no distinction
+       */
+      case Case(e, Alternative(PatternVar(x, _), body, _)::Nil, _) => {
+        enc(names, inline(x, e)(body))
       }
 
       case Case(e, as, _) => {
         for {
           name <- freshVarName ;
-          matchee <- enc(e) ;
+          matchee <- enc(names, e) ;
           simplified = createSimpleCaseMatch(env.data, as map alt2Equation, Var(name)::Nil ) ;
           simpleMatch <- case2SimpleMatch(simplified)
         } yield IMLet(name, matchee, simpleMatch)
       }
       
       case App(f, e, _) => for {
-        imF <- enc(f);
-        imA <- enc(e)
+        imF <- enc(names,f);
+        imA <- enc(names,e)
       } yield IMApp(imF, imA)
       
       case Let(defs, r, _) =>
         for {
-          b <- enc(r) ;
+          b <- enc(names,r) ;
           let <- defs.foldLeftM(b)(makeLet) 
         } yield let
 
       case Conditional(c, t, e, _) => for {
-        imC <- enc(c);
-        imT <- enc(t);
-        imE <- enc(e)        
+        imC <- enc(names,c);
+        imT <- enc(names,t);
+        imE <- enc(names,e)        
       } yield IMIf(imC, imT, imE)
 
-      case ExCon(ConVar(i, LocalMod), _) if env.localNames contains i => 
-        IMStaticAcc(env.currentModule $ i, instanceField)
-      case ExCon(ConVar(n, LocalMod), _) => IMVar(n)
-      case ExCon(ConVar(n, mod), _) => IMStaticAcc(env.modules(mod), instanceField)
+      case ExCon(ConVar(i, LocalMod), _) => env.names(i)
+      case ExCon(ConVar(n, mod), _) => {        
+        IMStaticAcc(env.modules(mod), ClassField(n, TObject))
+      }
 
-      case ExVar(Var(i, LocalMod), _) if env.localNames contains i => 
-        IMStaticAcc(env.currentModule $ i, instanceField)
-      case ExVar(Var(i, LocalMod), _) => IMVar(i)
-      case ExVar(Var(i, mod), _) => IMStaticAcc(env.modules(mod), instanceField)
+      case ExVar(Var(i, LocalMod), _) => names(i)
+      case ExVar(Var(i, mod), _) => {
+        println("Found " + i + " in " + mod)
+        IMStaticAcc(env.modules(mod), ClassField(i, TObject))
+      }
 
       case ConstInt(v, _) => IMConstInt(v)
       case ConstChar(c, _) => IMConstChar(c)
@@ -224,39 +255,21 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPat
       case hd::tl => for(l <- hd.left ; rec <- concatLeft(tl).left) yield l::rec
     }
 
-    def encodeFunction(fds : List[FunctionDef]) : Either[Lambda, Expr] = {
+    def encodeFunction(fds : List[FunctionDef]) : Expr = {
       val rhs : Either[List[Lambda], Expr] = concatLeft(fds map encodeFunctionDef)
-      for (lambdas <- rhs.left) yield lambdas.reduce(mergeCases)
-    }
-
-    def createNamedClosure(l : Lambda, name : ClassName) : Encoder[IMSubClass] = l match {
-      case Lambda(ps, e, _) => ps.reverse match {
-        case p :: Nil => {
-          for {
-            cls <- makeClosure(name, e, p)
-          } yield IMSubClass(cls)
-        }
-        case p :: rest => {
-          for {
-            cls <- makeClosure(name, Lambda(rest, e), p)
-          } yield IMSubClass(cls)
-        }
-        case Nil => {
-          for (im <- enc(e); cls <- newClosure(name, im)) yield IMSubClass(cls)
-        }
+      (for (lambdas <- rhs.left) yield lambdas.reduce(mergeCases)) match {
+        case Right(e) => e
+        case Left(l) => l
       }
-    }
-
-    def createNamedConstant(e : Expr, name : String) : Encoder[IMModuleElement] = {
-      for(im <- enc(e)) yield IMConstant(name, im)
     }
 
     def encProgram(p : Program) : Encoder[IMModuleClass] = {
       val defs = p.functionDefs mapValues encodeFunction
       
-      val encFields = defs.toList map { 
-        case (k,Left(lambda)) => createNamedClosure(lambda, env.currentModule $ k)
-        case (k,Right(constant)) => createNamedConstant(constant, k)
+      val encFields : List[Encoder[IMConstant]] = defs.toList map { 
+        case (k, e) => {
+          for (im <- enc(env.names, e)) yield IMConstant(k, im)
+        }
       }
   
       for (
@@ -265,6 +278,6 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with IMSyntax with WadlerPat
     }
     
     val (state, klazz) = encProgram(p)(IMEncodingState(Nil))    
-    klazz.copy(elements = klazz.elements ++ (state.classes map (IMSubClass(_))))
+    klazz.copy(elements = klazz.elements ++ state.closures)
   }
 }

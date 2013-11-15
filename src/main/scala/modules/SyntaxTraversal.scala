@@ -32,6 +32,8 @@ import scala.language.higherKinds
 import scala.language.implicitConversions
 import scala.reflect.runtime.universe._
 
+import Syntax._
+
 /**
   * Generic traversal of an abstract syntax tree.
   */
@@ -63,7 +65,6 @@ trait SyntaxTraversal {
     def apply[A](a: A): A = f(a.asInstanceOf[B]).asInstanceOf[A]
     def isDefinedAt[A: TypeTag](a: A): Boolean = typeTag[A].tpe <:< typeTag[B].tpe && f.isDefinedAt(a.asInstanceOf[B])
   }
-
 
   /**
     * Generic map function for SL definitions and expressions.
