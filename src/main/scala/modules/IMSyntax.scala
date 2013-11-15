@@ -37,12 +37,18 @@ trait IMSyntax extends PreProcessing {
   
   type IMName = String
  
+  /**
+    * A field in a JVM - class
+    */
   sealed class ClassField private (val name : String, val tipe : IMType)
   
   object ClassField {
     def apply(name : String, tipe : IMType) = new ClassField(escapeIde(name), tipe)
   }
 
+  /**
+    * A JVM class name (containing package, main part and sub-class part
+    */
   sealed case class ClassName(pkg : List[String], main : String, internal : List[String]) {
     override def toString() = 
       (((main::pkg).reverse.mkString(".")::Nil) ++ internal.reverse).mkString("$")
@@ -56,7 +62,6 @@ trait IMSyntax extends PreProcessing {
 
   sealed abstract class IMCode
   
-  case class IMCons(klazz : ClassName, args : List[IMCode]) extends IMCode
 
   /**
    * A closure creation
@@ -66,16 +71,40 @@ trait IMSyntax extends PreProcessing {
    */
   case class IMCapture(nr : Int, env : List[IMCode]) extends IMCode
 
-  case class IMVar(owner : ClassName, name : IMName) extends IMCode
-  case class IMMethodArg(nr : Int) extends IMCode
+  /**
+    * A mutually recursive capture
+    *
+    */
+  case class IMLetRec(group : Map[String, Int], fv : List[IMCode], body : IMCode) extends IMCode
 
+  /**
+    * A local variable
+    */
   case class IMLocalVar(name : IMName) extends IMCode
+
+  /**
+    * A closure environment reference
+    */
   case class IMClosureVar(nr : Int) extends IMCode
+
+  /**
+    * A method argument (numbered for possible currying
+    */
   case class IMArgument(nr : Int) extends IMCode
+
+  /**
+    * Self reference inside a closure
+    */
   case object IMClosureSelf extends IMCode
 
+  /**
+    * Application
+    */
   case class IMApp(lhs : IMCode, rhs : IMCode) extends IMCode
   
+  /**
+    * A static variable (reference to a module)
+    */
   case class IMStaticAcc(lhs : ClassName, arg : ClassField) extends IMCode
   case class IMAcc(lhs : IMCode, arg : ClassField) extends IMCode
 

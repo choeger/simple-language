@@ -45,7 +45,9 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
   sealed case class ASMEncodingState(current : ASMClass,
                                      classes : List[ASMClass] = Nil,
                                      closures : Map[Int, IMCode] = Map(),
-                                     freshName : Int = 0)
+                                     localOffset : Int = 0,
+                                     localMax : Int = -1,  
+                                     locals : List[String] = Nil)
 
   type ASMEncoder[A] = State[ASMEncodingState, A]
 
@@ -55,6 +57,47 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
       writer.visitEnd()
       JVMClass(name, writer.toByteArray)
     }
+  }
+
+  def pushLocal(name:String) : ASMEncoder[Int] = {
+    for (state <- get[ASMEncodingState] ;
+         _ <- put(state.copy(
+           localMax = Math.max(state.localMax, state.locals.size),
+           locals = name::state.locals)))
+      yield(state.locals.size + state.localOffset)
+  }
+
+  def maxLocal : ASMEncoder[Int] = {
+    for (state <- get[ASMEncodingState]) yield state.localMax
+  }
+
+  def getLocals : ASMEncoder[(List[String], Int, Int)] = {
+    for (state <- get[ASMEncodingState]) yield (state.locals, state.localOffset, state.localMax)
+  }
+
+  def setLocals(max : Int, offset : Int, locals : List[String]) = {
+    for (state <- get[ASMEncodingState] ;
+    _ <- put(state.copy(locals = locals, localOffset = offset, localMax = max))) yield (max)
+  }
+
+  def resetLocals(offset : Int) : ASMEncoder[Unit] = {
+    for (state <- get[ASMEncodingState] ;
+         _ <- put(state.copy(
+           localMax = -1,
+           localOffset = offset,
+           locals = Nil)))
+      yield(state.locals.size)
+  }
+
+  def popLocal : ASMEncoder[Int] = {
+    for (state <- get[ASMEncodingState] ;
+         _ <- put(state.copy(locals = state.locals.tail)))
+      yield(state.locals.size + state.localOffset)
+  }
+
+  def getLocal(name:String) : ASMEncoder[Int] = {
+    for (state <- get[ASMEncodingState])
+      yield(state.locals.size - state.locals.indexOf(name) + state.localOffset - 1)
   }
 
   def allocDispatch(nr : Int, e : IMCode) : ASMEncoder[Int] = {
@@ -70,6 +113,7 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
       cw = klazz.writer ;
       _ = cw.visit(V1_5, ACC_PUBLIC + ACC_SUPER, module.name.jvmString, null, jvmSuperClass(GeneralObject), (jvmSuperClass(ClosureClass)::Nil).toArray) ;
       elements <- (module.elements map encodeElement(ctxt)).sequence  ;
+      _ <- resetLocals(3) ;
       _ <- addDispatchMethod      
     ) yield klazz          
       
@@ -208,6 +252,33 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
   * Expression compilation into method body
   */
   def bc(mv : MethodVisitor, e : IMCode) : ASMEncoder[Unit] = e match {
+    case IMLet(name, d, r) => {
+      val sl = new Label()
+      val el = new Label()
+
+      for {
+        _ <- bc(mv, d) ;
+        max <- maxLocal ;
+        idx <- pushLocal(name) ;        
+        _ = if (idx > max) { 
+          /* Only create variable table entry, if first register hit */
+          mv.visitLocalVariable("local_" + idx, "Ljava/lang/Object;", null, sl, el, idx) 
+        } ;
+        _ = mv.visitVarInsn(ASTORE, idx) ;
+        _ = mv.visitLabel(sl) ;
+        _ <- bc(mv, r) ;
+        _ <- popLocal ;
+        _ = mv.visitLabel(el) 
+      } yield ()
+    }
+
+    case IMLocalVar(name) => {
+      for {
+        idx <- getLocal(name) ;
+        _ = mv.visitVarInsn(ALOAD, idx)
+      } yield ()
+    }
+
     case IMCapture(nr, args) => for (
       current <- currentModule ;
       _ = mv.visitTypeInsn(NEW, current.name.jvmString) ;
@@ -219,11 +290,6 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
       _ = mv.visitMethodInsn(INVOKESPECIAL, current.name.jvmString, "<init>", "(I[Ljava/lang/Object;)V")
     ) yield ()
   
-      case IMVar(klazz, x) => () => {
-        mv.visitVarInsn(ALOAD, 0) ; //this
-        mv.visitFieldInsn(GETFIELD, klazz.jvmString, x, "Ljava/lang/Object;")
-      }
-
     case IMIf(c, t, e) => for (
       _ <- bc(mv, c) ;
       tLabel = new Label() ; 
@@ -324,6 +390,7 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
         cw = current.writer ;
         mv = cw.visitMethod(ACC_PUBLIC + ACC_STATIC, name, "()Ljava/lang/Object;", null, null);
         _ = mv.visitCode();
+        _ <- resetLocals(0) ;
         _ <- bc(mv, e) ;
         _ = mv.visitInsn(ARETURN) ;
         _ = mv.visitMaxs(0,0) ;

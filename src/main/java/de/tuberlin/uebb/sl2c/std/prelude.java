@@ -157,5 +157,14 @@ public final class prelude {
 
     final static Object intEq = new IntEq();
     public static Object $e$e() { return intEq; }
+
+    private static final class IntNeg implements Closure {
+	public Object apply(final Object arg) {
+	    return -1 * ((Integer)arg);
+	}
+    }
+
+    final static Object intNeg = new IntNeg();
+    public static Object neg() { return intNeg; }
     
 }

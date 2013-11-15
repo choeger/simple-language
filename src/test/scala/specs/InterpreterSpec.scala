@@ -185,62 +185,118 @@ trait InterpreterSpec
            |DEF test = (\a b c d e. a * e) 1 2 3 4 5""".compiled.evaluated("test")) should result_correctly_in("5".evaluated)
         }
       }
-  }
 
-  describe("Compiling constants") {
-    it("Evaluate the declarations in order of dependency") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = c3""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
-    }
+    describe("Compiling constants") {
+      it("Evaluate the declarations in order of dependency") {
+        (constants+"\n"+
+          """PUBLIC FUN test: a
+            |DEF test = c3""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
+      }
 
-    it("Should hide constants by LETs") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l3""").compiled.evaluated("test") should result_correctly_in("3".evaluated)
-    }
+      it("Should hide constants by LETs") {
+        (constants+"\n"+
+          """PUBLIC FUN test: a
+            |DEF test = l3""").compiled.evaluated("test") should result_correctly_in("3".evaluated)
+      }
 
-    it("Should correctly evaluate shadowed right hand sides") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l1""").compiled.evaluated("test") should result_correctly_in("1".evaluated)
-    }
+      it("Should correctly evaluate shadowed right hand sides") {
+        (constants+"\n"+
+          """PUBLIC FUN test: a
+            |DEF test = l1""").compiled.evaluated("test") should result_correctly_in("1".evaluated)
+      }
 
-    it("Should correctly evaluate shadowed calculating right hand sides") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l2""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
-    }
+      it("Should correctly evaluate shadowed calculating right hand sides") {
+        (constants+"\n"+
+          """PUBLIC FUN test: a
+            |DEF test = l2""").compiled.evaluated("test") should result_correctly_in("2".evaluated)
+      }
 
-    it("Should correctly capture closure variables") {
-      (constants+"\n"+
-       """PUBLIC FUN test: a
-         |DEF test = l4""").compiled.evaluated("test") should result_correctly_in("8".evaluated)
+      it("Should correctly capture closure variables") {
+        (constants+"\n"+
+          """PUBLIC FUN test: a
+            |DEF test = l4""").compiled.evaluated("test") should result_correctly_in("8".evaluated)
+      }
     }
-  }
 
   
-  describe("Compiling (recursive) function definitions") {
+    describe("handling (recursive) function definitions") {
 
-    it("Should compile the identity function correctly") {
-      ("""DEF id2 x = x
-      	 |PUBLIC FUN test: Int
-      	 |DEF test = id2 42""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
-    }
+      
+      it("Should compile functions with shadowed local definitions") {
+        (shadowedLocalDef+"\n"+
+          """PUBLIC FUN test: r
+            |DEF test = f""").compiled.evaluated("test") should result_correctly_in("0".evaluated)
+      }
 
-    it("Should compile the factorial function correctly") {
-      ("""DEF fac n = IF n == 1 THEN 1 ELSE n * fac (n - 1)
-         |PUBLIC FUN test: Int
-         |DEF test = fac 12""".compiled.evaluated("test")) should result_correctly_in("479001600".evaluated)
-    }
+      it("Should compile functions with nested local definitions") {
+        (nestedLet+"\n"+
+          """PUBLIC FUN test: z
+            |DEF test = result""").compiled.evaluated("test") should result_correctly_in("12345".evaluated)
+      }
 
-    it("Should compile mutually recursive DEFs") {
-      """DEF even n = IF n == 0 THEN True ELSE odd (n - 1)
-        |DEF odd n = IF n == 1 THEN True ELSE even (n - 1)
-        |DEF test = even 100
-      """.compiled.evaluated("test") should result_correctly_in("True".evaluated)
+      it("Should compile ulam function") {
+        (ulam+"\n"+
+          """PUBLIC FUN test: z
+            |DEF test = ulam 11""").compiled.evaluated("test") should result_correctly_in("1".evaluated)
+      }
+
+      it("Should compile functions with shadowed local names") {
+        (shadowedVars+"\n"+
+          """PUBLIC FUN test: f
+            |DEF test = f""").compiled.evaluated("test") should result_correctly_in("-590".evaluated)
+      }
+
+      
+      it("Should compile the identity function correctly") {
+        ("""DEF id2 x = x
+      	   |PUBLIC FUN test: Int
+           |DEF test = id2 42""".compiled.evaluated("test")) should result_correctly_in("42".evaluated)
+      }
+
+      it("Should compile the factorial function correctly") {
+        ("""DEF fac n = IF n == 1 THEN 1 ELSE n * fac (n - 1)
+           |PUBLIC FUN test: Int
+           |DEF test = fac 12""".compiled.evaluated("test")) should result_correctly_in("479001600".evaluated)
+      }
+
+      it("Should compile mutually recursive DEFs") {
+        """DEF even n = IF n == 0 THEN True ELSE odd (n - 1)
+          |DEF odd n = IF n == 1 THEN True ELSE even (n - 1)
+          |DEF test = even 100
+        """.compiled.evaluated("test") should result_correctly_in("True".evaluated)
+      }
+
+      it("Should compile mutually recursive even and odd function") {
+        ("""DEF even n = IF n == 0 THEN True ELSE odd (n - 1)
+           |DEF odd n = IF n == 1 THEN True ELSE even (n - 1)
+           |PUBLIC FUN test: Bool
+           |DEF test = even 22""".compiled.evaluated("test")) should result_correctly_in("True".evaluated)
+      }
+
+      it("Should compile mutually recursive even and odd in let expression") {
+        ("""PUBLIC FUN test: a
+           |DEF test = LET even = \ n . IF n == 0 THEN True ELSE odd (n - 1)  
+           |    odd = \ n . IF n == 1 THEN True ELSE even (n - 1)  
+           |    IN even 22 """.compiled.evaluated("test")) should result_correctly_in("True".evaluated)
+      }
+
+      it("Should evaluate LETs in dependency-order") {
+        """PUBLIC FUN test: a
+          |DEF test = LET x=y y=5 IN x""".compiled.evaluated("test") should result_correctly_in("5".evaluated)
+      }
+
+      it("Should compile nested lets") {
+        ("""PUBLIC FUN test: x
+           |DEF test = LET a = LET c = 3 IN c + c IN a""".compiled.evaluated("test")) should result_correctly_in("6".evaluated)
+
+      }
+     
+      it("Should successfully compile functions with many parameters") {
+        ("""DEF add x y z = x + y + z
+           |PUBLIC FUN test: a
+      	   |DEF test = add 1 2 3""".compiled.evaluated("test")) should result_correctly_in("6".evaluated)
+      }    
     }
-    
   }
 
   /*  
@@ -268,38 +324,13 @@ trait InterpreterSpec
          |PUBLIC FUN test: a
          |DEF test = sum (Node (Leaf 13) (Node (Leaf 2)(Leaf 3)))""".compiled.evaluated("test")) should result_correctly_in("18".evaluated)
     }
+    
+   it("Should compile partial application") {
+   (partialApplication+"\n"+
+   """PUBLIC FUN test: z
+   |DEF test = call (-10) (g 10)""").compiled.evaluated("test") should result_correctly_in("0".evaluated)
+   }
 
-
-    it("Should compile mutually recursive even and odd function") {
-      ("""DEF even n = IF n == 0 THEN True ELSE odd (n - 1)  
-         |DEF odd n = IF n == 1 THEN True ELSE even (n - 1)
-         |PUBLIC FUN test: Bool
-         |DEF test = even 22""".compiled.evaluated("test")) should result_correctly_in("true".evaluated)
-    }
-
-    it("Should compile mutually recursive even and odd in let expression") {
-      ("""PUBLIC FUN test: a
-         |DEF test = LET even = \ n . IF n == 0 THEN True ELSE odd (n - 1)  
-         |    odd = \ n . IF n == 1 THEN True ELSE even (n - 1)  
-         |    IN even 22 """.compiled.evaluated("test")) should result_correctly_in("true".evaluated)
-    }
-
-    it("Should evaluate LETs in dependency-order") {
-      """PUBLIC FUN test: a
-        |DEF test = LET x=y y=5 IN x""".compiled.evaluated("test") should result_correctly_in("5".evaluated)
-    }
-
-    it("Should compile nested lets") {
-      ("""PUBLIC FUN test: x
-         |DEF test = LET a = LET c = 3 IN c + c IN a""".compiled.evaluated("test")) should result_correctly_in("6".evaluated)
-    }
-
-
-    it("Should successfully compile functions with many parameters") {
-      ("""DEF add x y z = x + y + z
-         |PUBLIC FUN test: a
-      	 |DEF test = add 1 2 3""".compiled.evaluated("test")) should result_correctly_in("6".evaluated)
-    }
   }
 
 
@@ -557,6 +588,7 @@ trait InterpreterSpec
          |DEF test = f 100 200 300""").compiled.evaluated("test") should result_correctly_in("0".evaluated)
     }
 
+
     it("Should compile a function with a reserved JavaScript name as argument name") {
       ("""DEF f return = return + 1
          |PUBLIC FUN test: a
@@ -567,18 +599,6 @@ trait InterpreterSpec
       (lambdaPatterns+"\n"+
        """PUBLIC FUN test: r
          |DEF test = f""").compiled.evaluated("test") should result_correctly_in("-531".evaluated)
-    }
-
-    it("Should compile functions with shadowed local definitions") {
-      (shadowedLocalDef+"\n"+
-       """PUBLIC FUN test: r
-         |DEF test = f""").compiled.evaluated("test") should result_correctly_in("0".evaluated)
-    }
-
-    it("Should compile functions with nested local definitions") {
-      (nestedLet+"\n"+
-       """PUBLIC FUN test: z
-         |DEF test = result""").compiled.evaluated("test") should result_correctly_in("12345".evaluated)
     }
 
     it("Should compile functions with shadowed pattern variables") {
@@ -593,23 +613,7 @@ trait InterpreterSpec
          |DEF test = f (-5) (-10) 0""").compiled.evaluated("test") should result_correctly_in("-15".evaluated)
     }
 
-    it("Should compile ulam function") {
-      (ulam+"\n"+
-       """PUBLIC FUN test: z
-         |DEF test = ulam 11""").compiled.evaluated("test") should result_correctly_in("1".evaluated)
-    }
 
-    it("Should compile partial application") {
-      (partialApplication+"\n"+
-       """PUBLIC FUN test: z
-         |DEF test = call (-10) (g 10)""").compiled.evaluated("test") should result_correctly_in("0".evaluated)
-    }
-
-    it("Should compile functions with shadowed local names") {
-      (shadowedVars+"\n"+
-       """PUBLIC FUN test: f
-         |DEF test = f""").compiled.evaluated("test") should result_correctly_in("-590".evaluated)
-    }
   }*/
 
 }

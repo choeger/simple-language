@@ -37,27 +37,39 @@ import Scalaz._
 
 import scala.language.implicitConversions
 
+/**
+  * Direct encoding of Expr into IMCode
+  */
 trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IMSyntax with WadlerPatternMatching with Configs {
 
-
-  def instanceField = ClassField("instance", TObject)
-  
+  /**
+    * Intermediate encoding state, contains name counter and created closures
+    */
   sealed case class IMEncodingState(closures : List[IMClosure] = Nil, 
                                     freshName : Int = 0, 
                                     names : Map[String, IMCode] = Map()
                                   )
 
+  /**
+    * encoder state monad
+    */
   type Encoder[A] = State[IMEncodingState, A]
 
+  /**
+    * A simplified (nested) lambda without SL's pattern abstractions
+    */
   sealed case class SimpleLambda(arg : IMName, args : List[IMName], code : Expr) 
 
+  /**
+    *  Convert an SL-lambda into a SimpleLambda
+    */
   def convertLambda(l : Lambda) : SimpleLambda = l match {
     case Lambda(p::Nil, code, _) => p match {
         case PatternVar(x, _) => {
           SimpleLambda(x, Nil, code) 
         }
         case p@_ => {
-          SimpleLambda("arg", Nil, Case(ExVar(Var("arg")), Alternative(p, code)::Nil))
+          SimpleLambda("_arg0", Nil, Case(ExVar(Var("_arg0")), Alternative(p, code)::Nil))
         }
     }
     
@@ -69,11 +81,13 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
           SimpleLambda(x, arg::args, code) 
         }
         case p@_ => {
-          SimpleLambda("arg", arg::args, Case(ExVar(Var("arg")), Alternative(p, code)::Nil))
+          SimpleLambda("_arg" + ps.size, arg::args, Case(ExVar(Var("_arg" + ps.size)), Alternative(p, code)::Nil))
         }
       }
     }
   }
+
+  private val g : Graph[String] = new GraphImpl[String]() {}
 
   private def addClosure(code : IMCode) : Encoder[IMClosure] = { 
     State({s:IMEncodingState => {
@@ -87,6 +101,10 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
     for (s <- get[IMEncodingState]; c=s.freshName; _ <- put(s.copy(freshName=c+1))) yield "#tmp_"+c
   }
 
+
+  /**
+    *  Encode an SL-module
+    */
   def encode(env : IMEncodingEnv, p : Program) : IMModuleClass = {
 
     object onlyVars {
@@ -122,12 +140,6 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
       case _ => throw new RuntimeException("Internal Error. Unexpected Pattern: " + e)
     }
 
-    def makeLet(in : IMCode, letDef : LetDef) : Encoder[IMCode] = {
-      for {
-        d <- enc(env.names, letDef.rhs)
-      } yield IMLet(letDef.lhs, d, in)
-    }
-
     def zipWithLength[T](l : List[T]) : List[(T, Int)] = l match {
       case Nil => Nil
       case x::rest => (x, rest.size)::zipWithLength(rest)
@@ -144,7 +156,7 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
         enc(localEnv + (arg -> IMArgument(0)), rhs) ;
       }
       case x::rest => {
-        val closed2 = arg::closed
+        val closed2 = arg::closed 
         val localEnv = names ++ closureEnv(closed)
 
         for {
@@ -157,16 +169,89 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
     def encLambda(names : Map[String, IMCode], s : SimpleLambda) : Encoder[IMCode] = s match {
 
       case SimpleLambda(arg, rest, rhs) => {
-        val closed = (fv(rhs) - arg -- rest --env.names.keys).toList
+        val moduleBound = (env.names.keys.toSet -- names.keys)
+        val closed = (fv(rhs) - arg -- rest -- moduleBound).toList
         for (c <- encClosure(arg, rest, names, closed, rhs) ; 
              cls <- addClosure(c))
           yield IMCapture(cls.nr, closed.map(names))
       }
     }
 
+    /**
+      * Encode a dependency-sorted group of LET-definitions
+      *  @param names the local environment
+      *  @param sorted the dependency-sorting
+      *  @param defs the definitions (by name)
+      *  @param body the LET-body
+      *  @return the encoding monad
+      */
+    def encodeLetDefs(names : Map[String, IMCode], sorted : List[Set[String]], 
+      defs : Map[String, Expr], body : Expr) : Encoder[IMCode] = sorted match {
+
+      /* simple case: no more definitions */
+      case Nil => enc(names, body)
+
+      /* simple LET, no recursion */
+      case scc::rest if scc.size == 1 => {
+        for (
+          code <- enc(names, defs(scc.head)) ;
+          body <- encodeLetDefs(names + (scc.head -> IMLocalVar(scc.head)), rest, defs, body)
+        ) yield IMLet(scc.head, code, body)
+      }
+
+      /* a recursive group */
+      case scc::rest => {
+        val group = scc.toList
+        val vars = for (s <- scc ; v <- fv(defs(s)) ; if !scc.contains(v)) yield v
+
+        val closed = group ++ vars.toList
+
+        val compiled : List[Encoder[Int]] =
+        for (s <- group) yield {
+          defs(s) match {
+            case l@Lambda(_,_,_) => {
+              val SimpleLambda(arg, rest, rhs) = convertLambda(l)
+              val enc = encClosure(arg, rest, names, closed, rhs)
+              for (c <- enc ; cls <- addClosure(c)) yield cls.nr
+            }
+
+            case _ => 
+              throw new RuntimeException("Non-lambda in recursive def " + scc.mkString("{",", ", "}"))
+          }
+        }
+
+        val nextEnv = names ++ scc.map { n => (n -> IMLocalVar(n)) }
+        /* actually invoke compilation */
+        for (
+          clsrs <- compiled.sequence ;
+          map = Map() ++ group.zip(clsrs) ;
+          imb <- encodeLetDefs(nextEnv, rest, defs, body)
+        ) yield IMLetRec(map, vars.toList.map(names), imb)
+      }
+    }
+
+    def dep(x : String, defs : Set[String], rhs : List[Expr]) : List[(String, String)] = {
+      for(e <- rhs ; v <- fv(e); if (defs.contains(v)) ) yield (x -> v)
+    }
+
     def enc(names : Map[String, IMCode], s : Expr) : Encoder[IMCode] = s match {
       case l@Lambda(_, _, _) => {
         encLambda(names, convertLambda(l))
+      }
+
+      /*
+       * LET's may be mututally recursive, so do a dependency analysis first
+       */
+      case Let(definitions, body, _) => {
+        val defs = Map() ++ definitions.map(d => (d.lhs -> d.rhs))
+        val boundVars = defs.keys.toSet
+        val dependencies = (for(
+          v <- boundVars;
+          deps <- dep(v, boundVars, defs(v)::Nil))
+        yield deps).toList
+        val depGraph = g.directedGraph(boundVars, dependencies)
+        val sorted = g.topologicalSort(g.stronglyConnectedComponents(depGraph), depGraph)
+        encodeLetDefs(names, sorted, defs, body)
       }
 
       /*
@@ -190,12 +275,6 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
         imA <- enc(names,e)
       } yield IMApp(imF, imA)
       
-      case Let(defs, r, _) =>
-        for {
-          b <- enc(names,r) ;
-          let <- defs.foldLeftM(b)(makeLet) 
-        } yield let
-
       case Conditional(c, t, e, _) => for {
         imC <- enc(names,c);
         imT <- enc(names,t);
@@ -207,7 +286,8 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
         IMStaticAcc(env.modules(mod), ClassField(n, TObject))
       }
 
-      case ExVar(Var(i, LocalMod), _) => names(i)
+      case ExVar(Var(i, LocalMod), _) if names.contains(i) => names(i)
+      case ExVar(Var(i, LocalMod), _) => env.names(i)
       case ExVar(Var(i, mod), _) => {
         IMStaticAcc(env.modules(mod), ClassField(i, TObject))
       }
@@ -218,8 +298,11 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
       case ConstReal(x, _) => IMConstReal(x)
     }
 
-    def pattern2Expr(e : Lambda, p : Pattern) : Lambda = {
-      Lambda(PatternVar("arg")::Nil, Case(ExVar(Var("arg")), Alternative(p, e)::Nil))
+    def patterns2LambdaChain(e : Lambda, p : List[Pattern]) : Lambda = p match {
+      case PatternVar(x, _)::ps => Lambda(PatternVar(x)::Nil, patterns2LambdaChain(e, ps))
+      case Nil => e
+      case p::ps => Lambda(PatternVar("_arg" + ps.size)::Nil, 
+        Case(ExVar(Var("_arg" + ps.size)), Alternative(p, patterns2LambdaChain(e, ps))::Nil))
     }
 
     /**
@@ -232,17 +315,21 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
      */
     def mergeCases(l : Expr, r : Expr) : Lambda = (l,r) match {
       case (
-        Lambda(PatternVar("arg",_)::Nil, 
-               Case(ExVar(Var("arg",LocalMod),_), (la@Alternative(p, e, _))::Nil, _), _), 
-        Lambda(PatternVar("arg", _)::Nil, Case(ExVar(Var("arg",LocalMod),_), as, _), _)) =>
-            Lambda(PatternVar("arg")::Nil, Case(ExVar(Var("arg",LocalMod)), la::as))
+        Lambda(PatternVar(arg1,_)::Nil, 
+               Case(ExVar(Var(arg2,LocalMod),_), (la@Alternative(p, e, _))::Nil, _), _), 
+        Lambda(PatternVar(arg3, _)::Nil, Case(ExVar(Var(arg4,LocalMod),_), as, _), _)) =>
+            Lambda(PatternVar(arg1)::Nil, Case(ExVar(Var(arg1,LocalMod)), la::as))
       case _ => throw new RuntimeException("Internal Error during case-merge")
     }
 
     def encodeFunctionDef(fd : FunctionDef) : Either[Lambda, Expr] = fd.patterns match {
         case p::ps => {
-          val l1 = Lambda(PatternVar("arg")::Nil, Case(ExVar(Var("arg")), Alternative(p, fd.expr)::Nil))
-          Left((l1 /: ps)(pattern2Expr))
+          val l1 = p match {
+            case PatternVar(x, _) => Lambda(p::Nil, fd.expr)
+            case _ => Lambda(PatternVar("_arg" + ps.size)::Nil, 
+              Case(ExVar(Var("_arg" + ps.size)), Alternative(p, fd.expr)::Nil))
+          }
+          Left(patterns2LambdaChain(l1, ps))
         }
         case Nil => {
           Right(fd.expr)
@@ -267,7 +354,7 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
       
       val encFields : List[Encoder[IMConstant]] = defs.toList map { 
         case (k, e) => {
-          for (im <- enc(env.names, e)) yield IMConstant(k, im)
+          for (im <- enc(Map(), e)) yield IMConstant(k, im)
         }
       }
   

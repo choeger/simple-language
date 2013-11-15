@@ -33,6 +33,9 @@ package de.tuberlin.uebb.sl2.tests.specs
   */ 
 trait SLPrograms {
 
+  /**
+    * Define some SL constants using LET-expressions
+    */
   val constants = """
   |DEF l1 = LET c2 = 2 IN c1
   |DEF l2 = LET c2 = 2 IN c3
