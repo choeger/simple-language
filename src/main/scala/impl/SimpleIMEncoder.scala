@@ -204,7 +204,7 @@ trait SimpleIMEncoder extends IMEncoder with Syntax with SyntaxTraversal with IM
         val group = scc.toList
         val vars = for (s <- scc ; v <- fv(defs(s)) ; if !scc.contains(v)) yield v
 
-        val closed = group ++ vars.toList
+        val closed = group.sorted.reverse ++ vars.toList
 
         val compiled : List[Encoder[Int]] =
         for (s <- group) yield {

@@ -67,6 +67,19 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
       yield(state.locals.size + state.localOffset)
   }
 
+  /**
+    * Creates the bytecode for a new local variable or reuses an older slot
+    */
+  def introduceLocal(sl : Label, el : Label, mv : MethodVisitor, name : String) : ASMEncoder[Int] = {
+    for (max <- maxLocal ;
+         idx <- pushLocal(name) ;        
+         _ = if (idx > max) { 
+          /* Only create variable table entry, if first register hit */
+          mv.visitLocalVariable("local_" + idx, "Ljava/lang/Object;", null, sl, el, idx) 
+         }
+    ) yield idx
+  }
+
   def maxLocal : ASMEncoder[Int] = {
     for (state <- get[ASMEncodingState]) yield state.localMax
   }
@@ -248,22 +261,85 @@ trait ASMBasedJVMEncoder extends JVMEncoder with IMSyntax {
     }
   }
 
+  def setFun(mv: MethodVisitor, sl : Label, el : Label, group : Map[String, Int])
+    (x : (String, Int)) : ASMEncoder[Unit] = {
+    val (name, index) = x
+    val closure = group(name)
+    for (current <- currentModule ;
+      localIdx <- introduceLocal(sl, el, mv, name) ;
+      _ = mv.visitInsn(DUP); // DUP array reference
+      _ = mv.visitInsn(DUP); // DUP array reference
+      _ = mv.visitTypeInsn(NEW, current.name.jvmString) ; //new closure      
+      _ = mv.visitInsn(DUP_X1) ;  //copy ahead of environment
+      _ = mv.visitInsn(SWAP) ;  //move environment ahead
+      _ = mv.visitLdcInsn(closure) ;
+      _ = mv.visitInsn(SWAP) ; // ENV, CLS, CLS, NR, ENV
+      _ = mv.visitMethodInsn(INVOKESPECIAL, current.name.jvmString, "<init>", 
+        "(I[Ljava/lang/Object;)V") ; // ENV CLS
+      _ = mv.visitInsn(DUP) ; // ENV CLS CLS
+      _ = mv.visitVarInsn(ASTORE, localIdx) ; //ENV CLS
+      _ = mv.visitLdcInsn(index) ; //ENV, CLS, ENTRY
+      _ = mv.visitInsn(SWAP) ; // ENV, ENTRY, CLS
+      _ = mv.visitInsn(AASTORE)
+    ) yield ()
+  }
+
+  def setFv(mv : MethodVisitor, offset : Int)(x : (IMCode, Int)) : ASMEncoder[Unit]= {
+    val (code : IMCode, index : Int) = x
+    for (current <- currentModule ; //expected: ..., ENV
+      _ = mv.visitInsn(DUP) ; //..., ENV, ENV
+      _ = mv.visitLdcInsn(offset + index) ; // ENV, ENTRY, ENV  
+      _ <- bc(mv, code) ; //ENV, ENTRY, VALUE
+      _ = mv.visitInsn(AASTORE) 
+    ) yield ()
+  }
+
  /**
   * Expression compilation into method body
   */
   def bc(mv : MethodVisitor, e : IMCode) : ASMEncoder[Unit] = e match {
+    /*
+     * A recursive group of definitions, 
+     *  let x1 = \\p1 . ...
+     *      ...
+     *      xn = \\pn . ...
+     * 
+     * Compiled into:
+     *   Object[] __env = new Object[n + #fv]
+     *   x1 = new Closure(numberOf|[e1]|, __env);
+     *   env[0] = x1;
+     *   ...
+     *   xn = new Closure(numberOf|[en]|, __env)
+     *   env[n] = xn;
+     *   env[n + 1] = |[fv(1)]|;
+     *   ...
+     */
+    case IMLetRec(group, fv, body) => {
+      val sl = new Label()
+      val el = new Label()
+      val names = group.keys.toList.sorted
+      val funs = names.zipWithIndex
+      val codeFuns = funs map setFun(mv, sl, el, group)
+
+      for (current <- currentModule ;
+        _ = mv.visitLdcInsn(funs.size + fv.size) ;
+        _ = mv.visitTypeInsn(ANEWARRAY, "java/lang/Object") ;
+        _ <- codeFuns.sequence ;
+        _ <- fv.zipWithIndex.map(setFv(mv, group.size)).sequence ;
+        _ = mv.visitLabel(sl) ;
+        _ <- bc(mv, body) ;
+        _ = mv.visitLabel(el) ;
+        _ <- (names map { _ => popLocal}).sequence
+      ) yield ()
+
+    }
     case IMLet(name, d, r) => {
       val sl = new Label()
       val el = new Label()
 
       for {
         _ <- bc(mv, d) ;
-        max <- maxLocal ;
-        idx <- pushLocal(name) ;        
-        _ = if (idx > max) { 
-          /* Only create variable table entry, if first register hit */
-          mv.visitLocalVariable("local_" + idx, "Ljava/lang/Object;", null, sl, el, idx) 
-        } ;
+        idx <- introduceLocal(sl, el, mv, name) ;
         _ = mv.visitVarInsn(ASTORE, idx) ;
         _ = mv.visitLabel(sl) ;
         _ <- bc(mv, r) ;
